@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#1a1a1a">
+    <title>旅人の杖</title>
+
+    <link rel="apple-touch-icon" sizes="180x180" href="icon-180-v2.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="icon-192-v2.png">
+    <link rel="icon" type="image/png" sizes="512x512" href="icon-512-v2.png">
+    <link rel="manifest" href="manifest.json">
+
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="style.css?v=3.0.3" />
+</head>
+<body>
+<button id="menu-btn" title="メニュー">☰</button>
+<button id="location-btn" title="現在地へ移動">🧭</button>
+<button id="reload-btn" title="最新の熱気を取得">↻</button>
+
+<button id="scan-btn" class="scan-button">もっと近づいてスキャン</button>
+
+    <button id="request-btn" class="floating-btn" title="スポット申請" style="bottom: 130px; background-color: #e67e22; color: white;">📍</button>
+    <button id="help-btn" class="floating-btn" title="ヘルプ">❓</button>
+    <button id="license-btn" class="floating-btn" title="ライセンス">📜</button>
+
+    <div id="loading-screen">
+        <img src="image_3.webp" id="loading-logo" alt="旅人の杖 ロゴ">
+        <p class="warning-text">
+            このアプリは探索の補助を目的としたツールです。<br>
+            収録されているデータはスポットの適性や正確性を保証するものではありません。<br>
+            周囲に注意して、安全を心掛けプレイしましょう。
+        </p>
+        <div class="loading-status">
+            <span class="loading-text">探索の準備中</span>
+            <span class="loading-dots">...</span>
+        </div>
+    </div>
+
+    <div id="map"></div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="app.js?v=3.0.3"></script>
+    
+</body>
+</html>
