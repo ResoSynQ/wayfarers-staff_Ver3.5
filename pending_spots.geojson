@@ -1,0 +1,139 @@
+{
+  "type": "FeatureCollection",
+  "approval_status": "OK",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "category": "local",
+        "trend_word": "5日まで愛好団体がラン展　鴨川（千葉県）(房日新聞)",
+        "name": "鴨川市役所",
+        "address": "",
+        "reason": "ラン展の開催情報に魅力を感じ、訪れたいと思わせる",
+        "date": "2026-05-02",
+        "link": "https://news.yahoo.co.jp/articles/f0997af07fb453f0b52b38765dfc11a7577099c2?source=rss"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          140.0987105,
+          35.1139863
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "category": "local",
+        "trend_word": "【南島原そうめん】“ふし” が世界を平和に　絵本でふるさとのおいしい魅力をPR《長崎》(長崎国際テレビ)",
+        "name": "南島原市役所",
+        "address": "",
+        "reason": "絵本で紹介されたそうめんの魅力を現地で体験したい",
+        "date": "2026-05-02",
+        "link": "https://news.yahoo.co.jp/articles/ba48e031ccf72b275581ccf784d700d21ced82dd?source=rss"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          130.2978634,
+          32.6597769
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "category": "local",
+        "trend_word": "【兵庫県宍粟市】定例発表実施　新公園開設・教育施策を述べる　フォトコン最優秀賞受賞者への表彰式も(ラジトピ　ラジオ関西トピックス)",
+        "name": "宍粟市役所",
+        "address": "",
+        "reason": "新公園開設や教育施策、フォトコン表彰式など、地域活動に魅力",
+        "date": "2026-05-01",
+        "link": "https://news.yahoo.co.jp/articles/a70f2de31124cda56e300507deaa07e28323b0dd?source=rss"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          134.5494657,
+          35.0044166
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "category": "local",
+        "trend_word": "伊豆のクリエーター集結「開国てづくり市」　初の南伊豆開催(みんなの経済新聞ネットワーク)",
+        "name": "開国てづくり市（ピンの位置は観光案内所）",
+        "address": "",
+        "reason": "手作り品に興味があり、南伊豆の自然も楽しめそうだから",
+        "date": "2026-04-28",
+        "link": "https://news.yahoo.co.jp/articles/c230d185ffa95eb2c95ce361e0b5db757d708d6a?source=rss"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          138.8666865697628,
+          34.64968867905211
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "category": "local",
+        "trend_word": "「富士山の巨大壁画」をモザイクアートで再現　旧神戸新聞会館の歴史を振り返るパネル展　ミント神戸(ラジトピ　ラジオ関西トピックス)",
+        "name": "ミント神戸",
+        "address": "",
+        "reason": "歴史的建造物のモザイクアートとパネル展で興味を引く",
+        "date": "2026-04-28",
+        "link": "https://news.yahoo.co.jp/articles/27b40b99666042b23fdd9bd02eef087e4e9303ea?source=rss"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          135.1960500300461,
+          34.69453103367957
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "category": "local",
+        "trend_word": "【桜坂劇場・下地久美子の映画コレ見た？】『オールド・オーク』荒廃する町に希望の光(沖縄タイムス)",
+        "name": "桜坂劇場",
+        "address": "",
+        "reason": "映画の舞台となる場所への訪問意欲を掻き立てる",
+        "date": "2026-04-26",
+        "link": "https://news.yahoo.co.jp/articles/690c48164b5d1b4766f44c27ea71042936b2c923?source=rss"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          127.69008124819284,
+          26.214989523857465
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "category": "local",
+        "trend_word": "10月11日・12日 福井・鯖江で音楽フェス開催へ　第1弾アーティストに氣志團ら7組(みんなの経済新聞ネットワーク)",
+        "name": "西山公園",
+        "address": "",
+        "reason": "音楽フェス開催と人気アーティストの出演",
+        "date": "2026-04-25",
+        "link": "https://news.yahoo.co.jp/articles/3dcb1838266e2a4d608797ddf01a1e61c52a98d1?source=rss"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          136.18182770424394,
+          35.950545657302406
+        ]
+      }
+    }
+  ]
+}
