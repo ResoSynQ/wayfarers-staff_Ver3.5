@@ -1,5 +1,5 @@
 /**
- * 旅人の杖 Ver 2.0.23 (全国熱気レーダー対応版)
+ * 旅人の杖 Ver 3.5 (サムネイル画像表示・完全対応版)
  * メインロジック（東海自然歩道・本線緑/支線青 完璧塗り分け版）
  */
 
@@ -113,6 +113,8 @@ function renderGeoJson(key, bounds = null) {
         },
         pointToLayer: function(feature, latlng) {
             if (key === 'live_trend' || key === 'live_flower' || key === 'live_local') {
+                // 🌟 サムネイル画像を追加！
+                const imgHtml = feature.properties.image_url ? `<img src="${feature.properties.image_url}" style="width: 100%; height: 120px; object-fit: cover; border-radius: 6px; margin-top: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);"><br>` : '';
                 const linkHtml = feature.properties.link ? `<br><a href="${feature.properties.link}" target="_blank" style="display:inline-block; margin-top:8px; padding:6px 12px; background:${def.color}; color:#fff; text-decoration:none; border-radius:6px; font-size:0.9em; font-weight:bold; box-shadow:0 2px 4px rgba(0,0,0,0.2);">📰 ニュースを見る</a>` : '';
 
                 return L.circleMarker(latlng, {
@@ -125,7 +127,8 @@ function renderGeoJson(key, bounds = null) {
                     <div style="text-align:center;">
                         <b style="color:${def.color}; font-size:1.1em;">【${feature.properties.category}】</b><br>
                         <span style="font-size:1.2em; font-weight:bold;">${feature.properties.trend_word}</span><br>
-                        <span style="color:#666;">📍 ${feature.properties.name}</span>
+                        <span style="color:#666;">📍 ${feature.properties.name}</span><br>
+                        ${imgHtml}
                         ${linkHtml}
                     </div>
                 `);
@@ -139,7 +142,7 @@ function renderGeoJson(key, bounds = null) {
                 fillOpacity: 0.8
             });
 
-            // ▼ 【新設】万博レガシーで「STORE」なら青ピン（icons.blue）を立てる！！
+            // 万博レガシーで「STORE」なら青ピン（icons.blue）を立てる！！
             if (key === 'legacy_spots' && feature.properties.isStore) {
                 return L.marker(latlng, { icon: icons.blue });
             }
@@ -165,7 +168,13 @@ function renderGeoJson(key, bounds = null) {
                 return;
             }
             if (def.isLegacy) {
-                layer.bindPopup(`<div style="min-width:200px;">${feature.properties.popupContent}</div>`);
+                // 🌟 万博レガシー用のサムネイル画像を一番上に追加！
+                const imgHtml = feature.properties.image_url ? `<div style="text-align:center;"><img src="${feature.properties.image_url}" style="width: 100%; height: 120px; object-fit: cover; border-radius: 6px; margin-bottom: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);"></div>` : '';
+                
+                layer.bindPopup(`<div style="min-width:200px;">
+                    ${imgHtml}
+                    ${feature.properties.popupContent}
+                </div>`);
                 return;
             }
             const name = getFeatureName(feature.properties);
