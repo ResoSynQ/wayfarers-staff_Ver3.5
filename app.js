@@ -122,7 +122,7 @@ function renderGeoJson(key, bounds = null) {
 
                 if (count >= 35) {
                     return L.divIcon({
-                        html: `<img src="./myaku_large.webp" class="myaku-large-img">`,
+                        html: `<img src="./myaku_large.webp" class="myaku-large-img" style="transform: translate(-45%, -38%);">`,
                         className: 'custom-cluster-myaku-large',
                         iconSize: [0, 0],
                         iconAnchor: [0, 0]
@@ -295,6 +295,7 @@ scanBtn?.addEventListener('click', () => {
     }, 600);
 });
 
+const myakuCredit = '（画像のミャクミャク・こみゃく・こみゃくピンは二次創作です）';
 let restaurantWarningShown = false, advanceWarningShown = false;
 map.on('overlayadd', function(e) {
     if (e.name.includes('トレンド') && rawData['live_trend']) renderGeoJson('live_trend');
@@ -302,12 +303,14 @@ map.on('overlayadd', function(e) {
     if (e.name.includes('ローカル') && rawData['live_local']) renderGeoJson('live_local');
     if (e.name.includes('ユーザー投稿') && rawData['user_spots']) renderGeoJson('user_spots');
     if (e.name.includes('万博') && rawData['legacy_spots']) renderGeoJson('legacy_spots');
+    if (e.name.includes('万博')) map.attributionControl.addAttribution(myakuCredit);
     if (e.name.includes('トレンド') || e.name.includes('開花') || e.name.includes('ローカル')) map.attributionControl.addAttribution(yahooCredit);
     if (e.name.includes('喫茶店') && !restaurantWarningShown) { alert("飲食店データは最大で10mの誤差があることがあります。立ち寄る際は十分に確認してください。"); restaurantWarningShown = true; }
     if ((e.name.includes('トレイル') || e.name.includes('自然歩道') || e.name.includes('五街道')) && !advanceWarningShown) { alert("【上級者向け警告】\n難易度の高いルートが含まれます。事前に計画を立てましょう。"); advanceWarningShown = true; }
 });
 
 map.on('overlayremove', function(e) {
+    if (e.name.includes('万博')) map.attributionControl.removeAttribution(myakuCredit);
     if (e.name.includes('トレンド') || e.name.includes('開花') || e.name.includes('ローカル')) {
         let hasLiveLayer = false;
         if (layers['live_trend'] && map.hasLayer(layers['live_trend'])) hasLiveLayer = true;
