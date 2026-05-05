@@ -404,3 +404,13 @@ map.on('zoomend', function() {
         legacyClusterGroup.refreshClusters();
     }
 });
+
+// 初期ロード時はzoomendが発火しないため、起動直後に1度だけ実行
+(function applyInitialMyakuSize() {
+    const zoom = map.getZoom();
+    let size = 30;
+    if (zoom <= 12) size = 30;
+    else if (zoom === 13) size = 35;
+    else if (zoom === 14) size = 40;
+    document.documentElement.style.setProperty('--myaku-size', size + 'px');
+})();
