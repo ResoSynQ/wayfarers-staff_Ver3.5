@@ -1,6 +1,5 @@
 /**
- * 旅人の杖 Ver 3.5 (サムネイル画像表示・完全対応版)
- * メインロジック（東海自然歩道・本線緑/支線青 完璧塗り分け版）
+ * 旅人の杖 Ver 3.5 (ミャクミャク完全召喚・爆速WebP対応版)
  */
 
 const map = L.map('map', { center: [34.6937, 135.5023], zoom: 13, maxZoom: 19, zoomControl: false });
@@ -10,7 +9,7 @@ map.attributionControl.setPosition('bottomleft');
 // ▼ Yahoo! APIのクレジット表記用テキスト
 const yahooCredit = '<a href="https://developer.yahoo.co.jp/sitemap/">Web Services by Yahoo! JAPAN</a>';
 
-// 🛡️ エラーの原因だった特殊ピンを削除し、基本のピンだけにしたぜ！
+// 🛡️ 基本のピン
 const icons = {
     red: new L.Icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png', shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png', iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34] }),
     blue: new L.Icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png', shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png', iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34] }),
@@ -101,20 +100,21 @@ function renderGeoJson(key, bounds = null) {
     layers[key].clearLayers();
     const def = layerDefs[key];
 
-    // ▼ ▼ ▼ ココから大改修（万博レガシー専用のクラスタリング） ▼ ▼ ▼
-if (key === 'legacy_spots') {
+    // ▼ ▼ ▼ 万博レガシー専用のクラスタリング（ミャクミャク召喚ギミック） ▼ ▼ ▼
+    if (key === 'legacy_spots') {
         const clusterGroup = L.markerClusterGroup({
             maxClusterRadius: 60,
             iconCreateFunction: function(cluster) {
-                const markers = cluster.getAllChildMarkers();
+                const childMarkers = cluster.getAllChildMarkers();
                 const count = cluster.getChildCount();
                 
                 let hasStore = false;
                 let hasKomyaku = false;
-                markers.forEach(marker => {
-                    // 🌟 絶対防壁！マーカーに中身(feature)がある時だけプロパティを確認する！
-                    if (marker.feature && marker.feature.properties) {
-                        const props = marker.feature.properties;
+                
+                // 🌟 ReferenceError対策：引数名を m にし、明示的な function を使用して絶対防壁を張る！
+                childMarkers.forEach(function(m) {
+                    if (m && m.feature && m.feature.properties) {
+                        const props = m.feature.properties;
                         if (props.isStore) hasStore = true;
                         if (props.isKomyaku) hasKomyaku = true;
                     }
@@ -149,8 +149,6 @@ if (key === 'legacy_spots') {
         const geoJsonLayer = L.geoJSON(repairGeoJson(rawData[key]), {
             pointToLayer: function(feature, latlng) {
                 let mIconUrl = './myakupin_red.webp';
-                
-                // 🌟 ここにも絶対防壁！
                 if (feature.properties) {
                     if (feature.properties.isStore) mIconUrl = './myakupin_blue.webp';
                     else if (feature.properties.isKomyaku) mIconUrl = './myakupin_gray.webp';
@@ -163,7 +161,6 @@ if (key === 'legacy_spots') {
                     popupAnchor: [0, -45]
                 });
                 
-                // 🌟 マーカー自身にしっかりとデータ(feature)を持たせておく保険！
                 const marker = L.marker(latlng, { icon: mIcon });
                 marker.feature = feature; 
                 return marker;
@@ -176,11 +173,10 @@ if (key === 'legacy_spots') {
 
         clusterGroup.addLayer(geoJsonLayer);
         layers[key].addLayer(clusterGroup);
-        return;
+        return; 
     }
-    // ▲ ▲ ▲ ココまで大改修 ▲ ▲ ▲
+    // ▲ ▲ ▲ ここまでレガシー専用処理 ▲ ▲ ▲
 
-    // ... これ以降は既存の他レイヤーの処理 ...
     L.geoJSON(repairGeoJson(rawData[key]), {
         filter: function(feature) {
             if (key === 'live_trend' || key === 'live_flower' || key === 'live_local') {
@@ -194,16 +190,11 @@ if (key === 'legacy_spots') {
         },
         pointToLayer: function(feature, latlng) {
             if (key === 'live_trend' || key === 'live_flower' || key === 'live_local') {
-                // 🌟 サムネイル画像を追加！
                 const imgHtml = feature.properties.image_url ? `<img src="${feature.properties.image_url}" style="width: 100%; height: 120px; object-fit: cover; border-radius: 6px; margin-top: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);"><br>` : '';
                 const linkHtml = feature.properties.link ? `<br><a href="${feature.properties.link}" target="_blank" style="display:inline-block; margin-top:8px; padding:6px 12px; background:${def.color}; color:#fff; text-decoration:none; border-radius:6px; font-size:0.9em; font-weight:bold; box-shadow:0 2px 4px rgba(0,0,0,0.2);">📰 ニュースを見る</a>` : '';
 
                 return L.circleMarker(latlng, {
-                    radius: 12,
-                    color: '#ffffff',
-                    weight: 2,
-                    fillColor: def.color,
-                    fillOpacity: 0.8
+                    radius: 12, color: '#ffffff', weight: 2, fillColor: def.color, fillOpacity: 0.8
                 }).bindPopup(`
                     <div style="text-align:center;">
                         <b style="color:${def.color}; font-size:1.1em;">【${feature.properties.category}】</b><br>
@@ -214,22 +205,12 @@ if (key === 'legacy_spots') {
                     </div>
                 `);
             }
-
-            if(def.isCircle) return L.circleMarker(latlng, {
-                radius: 6,
-                fillColor: def.circleColor || 'red',
-                color: '#fff',
-                weight: 2,
-                fillOpacity: 0.8
-            });
-
-            // それ以外はデフォルト設定のピン
+            if(def.isCircle) return L.circleMarker(latlng, { radius: 6, fillColor: def.circleColor || 'red', color: '#fff', weight: 2, fillOpacity: 0.8 });
             return L.marker(latlng, { icon: def.icon || new L.Icon.Default() });
         },
         style: def.style,
         onEachFeature: function(feature, layer) {
             if (key === 'live_trend' || key === 'live_flower' || key === 'live_local') return;
-            
             if (def.isUserSpot) {
                 const name = feature.properties.name || "名称未定";
                 const reason = feature.properties.reason || "";
@@ -266,11 +247,8 @@ const overlayMaps = {
     "♟️ 道標": layers.rel, "🌳 公園・遊具": layers.park, "🏟️ 公共施設": layers.com, "📚 文化施設": layers.mus, "🏃‍♂️ 体育施設": layers.gym, "🏯 文化財": layers.cul, "🚾 トイレ": layers.wc,
     "🏞️ 景観地区": layers.keikan, "🌲 景観重要建造物樹木": layers.tree, "📜 歴史的風土保存区域": layers.fudo, "🏘️ 伝統的建造物群保存地区": layers.denken, "🗺️ 歴史的風致重点地区": layers.fuchi, "🎆 観光資源": layers.kanko, 
     "🍽️ 喫茶店・レストラン": layers.restaurants, "🐾 トレイル.古道": layers.trail, "🛤️ 東海自然歩道": layers.shizenhodo, "🛣️ 五街道": layers.gokaido,
-    "🌍 トレンド": layers.live_trend,
-    "🌸 開花": layers.live_flower,
-    "😊 ローカルニュース": layers.live_local,
-    "🗣️ ユーザー投稿スポット": layers.user_spots,
-    "🎡 万博・レガシー": layers.legacy_spots
+    "🌍 トレンド": layers.live_trend, "🌸 開花": layers.live_flower, "😊 ローカルニュース": layers.live_local,
+    "🗣️ ユーザー投稿スポット": layers.user_spots, "🎡 万博・レガシー": layers.legacy_spots
 };
 
 layers.rel.addTo(map); layers.park.addTo(map); layers.com.addTo(map);
@@ -318,18 +296,13 @@ scanBtn?.addEventListener('click', () => {
 });
 
 let restaurantWarningShown = false, advanceWarningShown = false;
-
 map.on('overlayadd', function(e) {
     if (e.name.includes('トレンド') && rawData['live_trend']) renderGeoJson('live_trend');
     if (e.name.includes('開花') && rawData['live_flower']) renderGeoJson('live_flower');
     if (e.name.includes('ローカル') && rawData['live_local']) renderGeoJson('live_local');
     if (e.name.includes('ユーザー投稿') && rawData['user_spots']) renderGeoJson('user_spots');
     if (e.name.includes('万博') && rawData['legacy_spots']) renderGeoJson('legacy_spots');
-
-    if (e.name.includes('トレンド') || e.name.includes('開花') || e.name.includes('ローカル')) {
-        map.attributionControl.addAttribution(yahooCredit);
-    }
-
+    if (e.name.includes('トレンド') || e.name.includes('開花') || e.name.includes('ローカル')) map.attributionControl.addAttribution(yahooCredit);
     if (e.name.includes('喫茶店') && !restaurantWarningShown) { alert("飲食店データは最大で10mの誤差があることがあります。立ち寄る際は十分に確認してください。"); restaurantWarningShown = true; }
     if ((e.name.includes('トレイル') || e.name.includes('自然歩道') || e.name.includes('五街道')) && !advanceWarningShown) { alert("【上級者向け警告】\n難易度の高いルートが含まれます。事前に計画を立てましょう。"); advanceWarningShown = true; }
 });
@@ -359,53 +332,35 @@ setTimeout(hideLoadingScreen, 4000);
 map.on('locationfound', (e) => { L.circleMarker(e.latlng, {radius: 8, fillColor: '#007BFF', color: '#fff', weight: 2, fillOpacity: 1}).addTo(map).bindPopup("現在地").openPopup(); });
 map.on('locationerror', () => { alert("現在地を取得できませんでした。端末の位置情報設定を確認してください。"); });
 
-// ▼ リロードボタン（↻）を押した時の処理（スマート・リロード）
 document.getElementById('reload-btn')?.addEventListener('click', async () => {
     const btn = document.getElementById('reload-btn');
     btn.innerText = "⏳";
-
     try {
         map.closePopup();
         const freshUrl = layerDefs.live_trend.url + '?t=' + new Date().getTime();
         const res = await fetch(freshUrl);
         if (res.ok) {
             const freshData = await res.json();
-            rawData['live_trend'] = freshData;
-            rawData['live_flower'] = freshData;
-            rawData['live_local'] = freshData;
-
+            rawData['live_trend'] = freshData; rawData['live_flower'] = freshData; rawData['live_local'] = freshData;
             if (map.hasLayer(layers['live_trend'])) renderGeoJson('live_trend');
             if (map.hasLayer(layers['live_flower'])) renderGeoJson('live_flower');
             if (map.hasLayer(layers['live_local'])) renderGeoJson('live_local');
         }
-
-        // ユーザー投稿もリロードする処理
         const freshUserUrl = layerDefs.user_spots.url + '?t=' + new Date().getTime();
         const resUser = await fetch(freshUserUrl);
         if (resUser.ok) {
             rawData['user_spots'] = await resUser.json();
             if (map.hasLayer(layers['user_spots'])) renderGeoJson('user_spots');
         }
-
-    } catch(e) {
-        console.error("最新データの取得に失敗しました:", e);
-    }
-
+    } catch(e) { console.error("最新データの取得に失敗しました:", e); }
     setTimeout(() => { btn.innerText = "↻"; }, 500);
 });
 
-// ▼ マップDJ リクエスト機能（申請ピン）
 let requestMarker = null;
-
 document.getElementById('request-btn')?.addEventListener('click', () => {
     if (requestMarker) map.removeLayer(requestMarker);
-
     const center = map.getCenter();
-    requestMarker = L.marker(center, {
-        draggable: true,
-        icon: icons.red
-    }).addTo(map);
-
+    requestMarker = L.marker(center, { draggable: true, icon: icons.red }).addTo(map);
     const popupContent = `
         <div style="text-align:center; min-width:180px;">
             <b style="font-size:1.1em; color:#d35400;">この地点を申請しますか？</b><br>
@@ -413,67 +368,29 @@ document.getElementById('request-btn')?.addEventListener('click', () => {
             <button id="confirm-request-btn" style="padding:8px 15px; background:#e67e22; color:white; border:none; border-radius:5px; cursor:pointer; font-weight:bold; width:100%;">✉️ この地点を申請</button>
         </div>
     `;
-
     requestMarker.bindPopup(popupContent).openPopup();
-
-    requestMarker.on('popupclose', () => {
-        if (requestMarker) {
-            map.removeLayer(requestMarker);
-            requestMarker = null;
-        }
-    });
+    requestMarker.on('popupclose', () => { if (requestMarker) { map.removeLayer(requestMarker); requestMarker = null; } });
 });
 
 document.addEventListener('click', (e) => {
     if (e.target && e.target.id === 'confirm-request-btn') {
         if (!requestMarker) return;
-
         const latlng = requestMarker.getLatLng();
-        const lat = latlng.lat.toFixed(6);
-        const lng = latlng.lng.toFixed(6);
-
-        // ★相棒のサポート用メールアドレス
+        const lat = latlng.lat.toFixed(6); const lng = latlng.lng.toFixed(6);
         const supportEmail = "information.app.excellent@gmail.com"; 
-
         const subject = encodeURIComponent("【マップDJ】新規スポット追加申請");
-
-        const body = encodeURIComponent(
-`面白いスポットを報告します。
-
-【スポット名】
-（ここに名称を入力してください）
-
-【おすすめの理由・説明】
-（ここにおすすめの理由を入力してください）
-
--------------------------
-【位置情報（自動取得）】
-緯度: ${lat}
-経度: ${lng}
-Googleマップで確認:
-https://www.google.com/maps?q=${lat},${lng}
--------------------------`
-        );
-
+        const body = encodeURIComponent(`面白いスポットを報告します。\n\n【スポット名】\n（ここに名称を入力してください）\n\n【おすすめの理由・説明】\n（ここにおすすめの理由を入力してください）\n\n-------------------------\n【位置情報（自動取得）】\n緯度: ${lat}\n経度: ${lng}\nGoogleマップで確認:\nhttps://www.google.com/maps?q=${lat},${lng}\n-------------------------`);
         window.location.href = `mailto:${supportEmail}?subject=${subject}&body=${body}`;
-
-        map.closePopup();
-        map.removeLayer(requestMarker);
-        requestMarker = null;
+        map.closePopup(); map.removeLayer(requestMarker); requestMarker = null;
     }
 });
 
-// ▼ ミャクミャクのズーム連動サイズ変更
 map.on('zoomend', function() {
     const zoom = map.getZoom();
     let size = 100;
-    
-    // ズームレベルに応じたサイズ指定
     if (zoom <= 12) size = 70;
     else if (zoom === 13) size = 90;
     else if (zoom === 14) size = 120;
     else if (zoom >= 15) size = 160;
-    
-    // CSS変数を書き換えて画像をダイナミックに伸縮させるぜ！
     document.documentElement.style.setProperty('--myaku-size', size + 'px');
 });
