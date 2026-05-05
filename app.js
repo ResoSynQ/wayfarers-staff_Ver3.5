@@ -100,6 +100,80 @@ function repairGeoJson(data) {
 function renderGeoJson(key, bounds = null) {
     layers[key].clearLayers();
     const def = layerDefs[key];
+
+    // ▼ ▼ ▼ ココから大改修（万博レガシー専用のクラスタリング） ▼ ▼ ▼
+    if (key === 'legacy_spots') {
+        const clusterGroup = L.markerClusterGroup({
+            maxClusterRadius: 60, // ★ ピンが合体する距離（ピクセル）
+            iconCreateFunction: function(cluster) {
+                const markers = cluster.getAllChildMarkers();
+                const count = cluster.getChildCount();
+                
+                // クラスター内に STORE や KOMYAKU が含まれているかチェック！
+                let hasStore = false;
+                let hasKomyaku = false;
+                markers.forEach(marker => {
+                    const props = marker.feature.properties;
+                    if (props.isStore) hasStore = true;
+                    if (props.isKomyaku) hasKomyaku = true;
+                });
+
+                // 🌟 35ピン以上：巨大ミャクミャク降臨！
+                if (count >= 35) {
+                    return L.divIcon({
+                        html: `<img src="./ミャクミャク.png" class="myaku-large-img">`,
+                        className: 'custom-cluster-myaku-large',
+                        iconSize: [0, 0], // CSSでサイズ制御するからここは0でOK
+                        iconAnchor: [0, 0]
+                    });
+                } 
+                // 🌟 2〜34ピン：こみゃく合体！
+                else {
+                    let imgUrl = './こみゃく赤.png';
+                    if (hasStore) imgUrl = './こみゃく青.png';
+                    else if (hasKomyaku) imgUrl = './こみゃく灰色.png';
+
+                    return L.divIcon({
+                        html: `<div style="position:relative; width:50px; height:50px;">
+                                   <img src="${imgUrl}" style="width:100%; height:100%; filter: drop-shadow(1px 2px 3px rgba(0,0,0,0.4));">
+                                   <div style="position:absolute; bottom:-5px; right:-5px; background:rgba(0,0,0,0.7); color:white; border-radius:50%; width:22px; height:22px; line-height:22px; text-align:center; font-size:12px; font-weight:bold;">${count}</div>
+                               </div>`,
+                        className: 'custom-cluster-komyaku',
+                        iconSize: [50, 50],
+                        iconAnchor: [25, 25]
+                    });
+                }
+            }
+        });
+
+        const geoJsonLayer = L.geoJSON(repairGeoJson(rawData[key]), {
+            // 🌟 1ピンの時の表示
+            pointToLayer: function(feature, latlng) {
+                let mIconUrl = './みゃくピン赤.png';
+                if (feature.properties.isStore) mIconUrl = './みゃくピン青.png';
+                else if (feature.properties.isKomyaku) mIconUrl = './みゃくピン灰色.png';
+
+                const mIcon = L.icon({
+                    iconUrl: mIconUrl,
+                    iconSize: [30, 45],
+                    iconAnchor: [15, 45],
+                    popupAnchor: [0, -45]
+                });
+                return L.marker(latlng, { icon: mIcon });
+            },
+            onEachFeature: function(feature, layer) {
+                const imgHtml = feature.properties.image_url ? `<div style="text-align:center;"><img src="${feature.properties.image_url}" style="width: 100%; height: 120px; object-fit: cover; border-radius: 6px; margin-bottom: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);"></div>` : '';
+                layer.bindPopup(`<div style="min-width:200px;">${imgHtml}${feature.properties.popupContent}</div>`);
+            }
+        });
+
+        clusterGroup.addLayer(geoJsonLayer);
+        layers[key].addLayer(clusterGroup);
+        return; // legacy_spots の処理はここで終わり！
+    }
+    // ▲ ▲ ▲ ココまで大改修 ▲ ▲ ▲
+
+    // ... これ以降は既存の他レイヤーの処理 ...
     L.geoJSON(repairGeoJson(rawData[key]), {
         filter: function(feature) {
             if (key === 'live_trend' || key === 'live_flower' || key === 'live_local') {
@@ -142,12 +216,7 @@ function renderGeoJson(key, bounds = null) {
                 fillOpacity: 0.8
             });
 
-            // 万博レガシーで「STORE」なら青ピン（icons.blue）を立てる！！
-            if (key === 'legacy_spots' && feature.properties.isStore) {
-                return L.marker(latlng, { icon: icons.blue });
-            }
-
-            // それ以外（通常レガシー含む）はデフォルト設定のピン（赤）！
+            // それ以外はデフォルト設定のピン
             return L.marker(latlng, { icon: def.icon || new L.Icon.Default() });
         },
         style: def.style,
@@ -165,16 +234,6 @@ function renderGeoJson(key, bounds = null) {
                         <span style="color:#555; font-size:0.9em;">${reason}</span>
                     </div>
                 `);
-                return;
-            }
-            if (def.isLegacy) {
-                // 🌟 万博レガシー用のサムネイル画像を一番上に追加！
-                const imgHtml = feature.properties.image_url ? `<div style="text-align:center;"><img src="${feature.properties.image_url}" style="width: 100%; height: 120px; object-fit: cover; border-radius: 6px; margin-bottom: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);"></div>` : '';
-                
-                layer.bindPopup(`<div style="min-width:200px;">
-                    ${imgHtml}
-                    ${feature.properties.popupContent}
-                </div>`);
                 return;
             }
             const name = getFeatureName(feature.properties);
@@ -395,4 +454,19 @@ https://www.google.com/maps?q=${lat},${lng}
         map.removeLayer(requestMarker);
         requestMarker = null;
     }
+});
+
+// ▼ ミャクミャクのズーム連動サイズ変更
+map.on('zoomend', function() {
+    const zoom = map.getZoom();
+    let size = 100;
+    
+    // ズームレベルに応じたサイズ指定
+    if (zoom <= 12) size = 70;
+    else if (zoom === 13) size = 90;
+    else if (zoom === 14) size = 120;
+    else if (zoom >= 15) size = 160;
+    
+    // CSS変数を書き換えて画像をダイナミックに伸縮させるぜ！
+    document.documentElement.style.setProperty('--myaku-size', size + 'px');
 });
