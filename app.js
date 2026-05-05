@@ -79,6 +79,7 @@ const immediateLayers = ['keikan', 'tree', 'fudo', 'denken', 'fuchi', 'kanko', '
 
 const rawData = {};
 const layers = {};
+let legacyClusterGroup = null; // ズーム連動のためスコープを外に出す
 Object.keys(layerDefs).forEach(key => { layers[key] = L.layerGroup(); });
 
 function repairGeoJson(data) {
@@ -102,7 +103,7 @@ function renderGeoJson(key, bounds = null) {
 
     // ▼ ▼ ▼ 万博レガシー専用のクラスタリング（ミャクミャク召喚ギミック） ▼ ▼ ▼
     if (key === 'legacy_spots') {
-        const clusterGroup = L.markerClusterGroup({
+        legacyClusterGroup = L.markerClusterGroup({
             maxClusterRadius: 60,
             iconCreateFunction: function(cluster) {
                 const childMarkers = cluster.getAllChildMarkers();
@@ -173,8 +174,8 @@ function renderGeoJson(key, bounds = null) {
             }
         });
 
-        clusterGroup.addLayer(geoJsonLayer);
-        layers[key].addLayer(clusterGroup);
+        legacyClusterGroup.addLayer(geoJsonLayer);
+        layers[key].addLayer(legacyClusterGroup);
         return; 
     }
     // ▲ ▲ ▲ ここまでレガシー専用処理 ▲ ▲ ▲
@@ -398,9 +399,8 @@ map.on('zoomend', function() {
     else if (zoom === 14) size = 40;
     document.documentElement.style.setProperty('--myaku-size', size + 'px');
 
-    // ズーム15以上でmyaku_largeを非表示
-    const myakuEls = document.querySelectorAll('.custom-cluster-myaku-large');
-    myakuEls.forEach(el => {
-        el.style.display = zoom >= 15 ? 'none' : '';
-    });
+    // legacyClusterGroupのアイコンを再生成させる（iconCreateFunctionを再呼び出し）
+    if (legacyClusterGroup) {
+        legacyClusterGroup.refreshClusters();
+    }
 });
