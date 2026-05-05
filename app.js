@@ -118,20 +118,20 @@ function renderGeoJson(key, bounds = null) {
                     if (props.isKomyaku) hasKomyaku = true;
                 });
 
-                // 🌟 35ピン以上：巨大ミャクミャク降臨！
+// 🌟 35ピン以上：巨大ミャクミャク降臨！
                 if (count >= 35) {
                     return L.divIcon({
-                        html: `<img src="./ミャクミャク.png" class="myaku-large-img">`,
+                        html: `<img src="./myaku_large.webp" class="myaku-large-img">`, // ★書き換え！
                         className: 'custom-cluster-myaku-large',
-                        iconSize: [0, 0], // CSSでサイズ制御するからここは0でOK
+                        iconSize: [0, 0], 
                         iconAnchor: [0, 0]
                     });
                 } 
                 // 🌟 2〜34ピン：こみゃく合体！
                 else {
-                    let imgUrl = './こみゃく赤.png';
-                    if (hasStore) imgUrl = './こみゃく青.png';
-                    else if (hasKomyaku) imgUrl = './こみゃく灰色.png';
+                    let imgUrl = './komyaku_red.webp'; // ★書き換え！
+                    if (hasStore) imgUrl = './komyaku_blue.webp'; // ★書き換え！
+                    else if (hasKomyaku) imgUrl = './komyaku_gray.webp'; // ★書き換え！
 
                     return L.divIcon({
                         html: `<div style="position:relative; width:50px; height:50px;">
@@ -149,9 +149,9 @@ function renderGeoJson(key, bounds = null) {
         const geoJsonLayer = L.geoJSON(repairGeoJson(rawData[key]), {
             // 🌟 1ピンの時の表示
             pointToLayer: function(feature, latlng) {
-                let mIconUrl = './みゃくピン赤.png';
-                if (feature.properties.isStore) mIconUrl = './みゃくピン青.png';
-                else if (feature.properties.isKomyaku) mIconUrl = './みゃくピン灰色.png';
+                let mIconUrl = './myakupin_red.webp'; // ★書き換え！
+                if (feature.properties.isStore) mIconUrl = './myakupin_blue.webp'; // ★書き換え！
+                else if (feature.properties.isKomyaku) mIconUrl = './myakupin_gray.webp'; // ★書き換え！
 
                 const mIcon = L.icon({
                     iconUrl: mIconUrl,
@@ -161,6 +161,7 @@ function renderGeoJson(key, bounds = null) {
                 });
                 return L.marker(latlng, { icon: mIcon });
             },
+            
             onEachFeature: function(feature, layer) {
                 const imgHtml = feature.properties.image_url ? `<div style="text-align:center;"><img src="${feature.properties.image_url}" style="width: 100%; height: 120px; object-fit: cover; border-radius: 6px; margin-bottom: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);"></div>` : '';
                 layer.bindPopup(`<div style="min-width:200px;">${imgHtml}${feature.properties.popupContent}</div>`);
