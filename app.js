@@ -121,8 +121,10 @@ function renderGeoJson(key, bounds = null) {
                 });
 
                 if (count >= 35) {
+                    const zoom = map.getZoom();
+                    const hidden = zoom >= 8 ? 'display:none;' : '';
                     return L.divIcon({
-                        html: `<img src="./myaku_large.webp" class="myaku-large-img" style="transform: translate(-45%, -38%);">`,
+                        html: `<img src="./myaku_large.webp" class="myaku-large-img" style="transform: translate(-45%, -38%); ${hidden}">`,
                         className: 'custom-cluster-myaku-large',
                         iconSize: [0, 0],
                         iconAnchor: [0, 0]
@@ -391,9 +393,15 @@ document.addEventListener('click', (e) => {
 map.on('zoomend', function() {
     const zoom = map.getZoom();
     let size = 100;
-    if (zoom <= 12) size = 70;
-    else if (zoom === 13) size = 90;
-    else if (zoom === 14) size = 120;
-    else if (zoom >= 15) size = 160;
+    if (zoom <= 12) size = 56;
+    else if (zoom === 13) size = 72;
+    else if (zoom === 14) size = 96;
+    else if (zoom >= 15) size = 128;
     document.documentElement.style.setProperty('--myaku-size', size + 'px');
+
+    // ズーム8以上でmyaku_largeを非表示
+    const myakuEls = document.querySelectorAll('.custom-cluster-myaku-large');
+    myakuEls.forEach(el => {
+        el.style.display = zoom >= 8 ? 'none' : '';
+    });
 });

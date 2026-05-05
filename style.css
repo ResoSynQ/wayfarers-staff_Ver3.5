@@ -109,3 +109,8 @@ body.menu-open .leaflet-control-layers { left: 0 !important; }
   filter: drop-shadow(2px 4px 4px rgba(0,0,0,0.5));
   transition: width 0.3s ease; /* ヌルヌル大きくなる魔法！ */
 }
+
+/* myaku_large を最前面レイヤーに */
+.custom-cluster-myaku-large {
+  z-index: 9999 !important;
+}
