@@ -102,36 +102,36 @@ function renderGeoJson(key, bounds = null) {
     const def = layerDefs[key];
 
     // ▼ ▼ ▼ ココから大改修（万博レガシー専用のクラスタリング） ▼ ▼ ▼
-    if (key === 'legacy_spots') {
+if (key === 'legacy_spots') {
         const clusterGroup = L.markerClusterGroup({
-            maxClusterRadius: 60, // ★ ピンが合体する距離（ピクセル）
+            maxClusterRadius: 60,
             iconCreateFunction: function(cluster) {
                 const markers = cluster.getAllChildMarkers();
                 const count = cluster.getChildCount();
                 
-                // クラスター内に STORE や KOMYAKU が含まれているかチェック！
                 let hasStore = false;
                 let hasKomyaku = false;
                 markers.forEach(marker => {
-                    const props = marker.feature.properties;
-                    if (props.isStore) hasStore = true;
-                    if (props.isKomyaku) hasKomyaku = true;
+                    // 🌟 絶対防壁！マーカーに中身(feature)がある時だけプロパティを確認する！
+                    if (marker.feature && marker.feature.properties) {
+                        const props = marker.feature.properties;
+                        if (props.isStore) hasStore = true;
+                        if (props.isKomyaku) hasKomyaku = true;
+                    }
                 });
 
-// 🌟 35ピン以上：巨大ミャクミャク降臨！
                 if (count >= 35) {
                     return L.divIcon({
-                        html: `<img src="./myaku_large.webp" class="myaku-large-img">`, // ★書き換え！
+                        html: `<img src="./myaku_large.webp" class="myaku-large-img">`,
                         className: 'custom-cluster-myaku-large',
-                        iconSize: [0, 0], 
+                        iconSize: [0, 0],
                         iconAnchor: [0, 0]
                     });
                 } 
-                // 🌟 2〜34ピン：こみゃく合体！
                 else {
-                    let imgUrl = './komyaku_red.webp'; // ★書き換え！
-                    if (hasStore) imgUrl = './komyaku_blue.webp'; // ★書き換え！
-                    else if (hasKomyaku) imgUrl = './komyaku_gray.webp'; // ★書き換え！
+                    let imgUrl = './komyaku_red.webp';
+                    if (hasStore) imgUrl = './komyaku_blue.webp';
+                    else if (hasKomyaku) imgUrl = './komyaku_gray.webp';
 
                     return L.divIcon({
                         html: `<div style="position:relative; width:50px; height:50px;">
@@ -147,11 +147,14 @@ function renderGeoJson(key, bounds = null) {
         });
 
         const geoJsonLayer = L.geoJSON(repairGeoJson(rawData[key]), {
-            // 🌟 1ピンの時の表示
             pointToLayer: function(feature, latlng) {
-                let mIconUrl = './myakupin_red.webp'; // ★書き換え！
-                if (feature.properties.isStore) mIconUrl = './myakupin_blue.webp'; // ★書き換え！
-                else if (feature.properties.isKomyaku) mIconUrl = './myakupin_gray.webp'; // ★書き換え！
+                let mIconUrl = './myakupin_red.webp';
+                
+                // 🌟 ここにも絶対防壁！
+                if (feature.properties) {
+                    if (feature.properties.isStore) mIconUrl = './myakupin_blue.webp';
+                    else if (feature.properties.isKomyaku) mIconUrl = './myakupin_gray.webp';
+                }
 
                 const mIcon = L.icon({
                     iconUrl: mIconUrl,
@@ -159,9 +162,12 @@ function renderGeoJson(key, bounds = null) {
                     iconAnchor: [15, 45],
                     popupAnchor: [0, -45]
                 });
-                return L.marker(latlng, { icon: mIcon });
+                
+                // 🌟 マーカー自身にしっかりとデータ(feature)を持たせておく保険！
+                const marker = L.marker(latlng, { icon: mIcon });
+                marker.feature = feature; 
+                return marker;
             },
-            
             onEachFeature: function(feature, layer) {
                 const imgHtml = feature.properties.image_url ? `<div style="text-align:center;"><img src="${feature.properties.image_url}" style="width: 100%; height: 120px; object-fit: cover; border-radius: 6px; margin-bottom: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);"></div>` : '';
                 layer.bindPopup(`<div style="min-width:200px;">${imgHtml}${feature.properties.popupContent}</div>`);
@@ -170,7 +176,7 @@ function renderGeoJson(key, bounds = null) {
 
         clusterGroup.addLayer(geoJsonLayer);
         layers[key].addLayer(clusterGroup);
-        return; // legacy_spots の処理はここで終わり！
+        return;
     }
     // ▲ ▲ ▲ ココまで大改修 ▲ ▲ ▲
 
