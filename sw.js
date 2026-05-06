@@ -1,6 +1,6 @@
 // --- 『旅人の杖と救いの泉』 Service Worker (Ver 1.0) ---
 
-const CACHE_NAME = 'wayfarers-staff-cache-v30'; 
+const CACHE_NAME = 'wayfarers-staff-cache-v31'; 
 
 const CACHE_ASSETS = [
     './',
@@ -11,7 +11,7 @@ const CACHE_ASSETS = [
     './image_3.webp',
     './icon-180-v2.png',
     './icon-192-v2.png',
-    './icon-512-v2.png'
+    './icon-512-v2.png',
     './myaku_large.webp',      // 🌟 新しいローマ字＆WebPファイルを追加！
     './komyaku_red.webp',
     './komyaku_blue.webp',
