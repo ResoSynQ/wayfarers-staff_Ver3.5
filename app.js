@@ -1,53 +1,3 @@
-            if(res.ok) {
-                rawData[key] = await res.json();
-                if (immediateLayers.includes(key)) renderGeoJson(key);
-            }
-        } catch (e) { console.error(`Failed to load ${key}:`, e); }
-    }
-}
-fetchAllData();
-
-const overlayMaps = {
-    "♟️ 道標": layers.rel, "🌳 公園・遊具": layers.park, "🏟️ 公共施設": layers.com, "📚 文化施設": layers.mus, "🏃‍♂️ 体育施設": layers.gym, "🏯 文化財": layers.cul, "🚾 トイレ": layers.wc,
-    "🏞️ 景観地区": layers.keikan, "🌲 景観重要建造物樹木": layers.tree, "📜 歴史的風土保存区域": layers.fudo, "🏘️ 伝統的建造物群保存地区": layers.denken, "🗺️ 歴史的風致重点地区": layers.fuchi, "🎆 観光資源": layers.kanko, 
-    "🍽️ 喫茶店・レストラン": layers.restaurants, "🐾 トレイル.古道": layers.trail, "🛤️ 東海自然歩道": layers.shizenhodo, "🛣️ 五街道": layers.gokaido,
-    "🌍 トレンド": layers.live_trend, "🌸 開花": layers.live_flower, "😊 ローカルニュース": layers.live_local,
-    "🗣️ ユーザー投稿スポット": layers.user_spots, "🎡 万博・レガシー": layers.legacy_spots
-};
-
-layers.rel.addTo(map); layers.park.addTo(map); layers.com.addTo(map);
-layers.mus.addTo(map); layers.gym.addTo(map); layers.cul.addTo(map);
-
-L.control.layers({}, overlayMaps, {collapsed: false, position: 'topleft'}).addTo(map);
-
-function insertCategoryHeaders() {
-    document.querySelectorAll('.custom-layer-header').forEach(el => el.remove());
-    document.querySelectorAll('.leaflet-control-layers-overlays label').forEach(label => {
-        const text = label.textContent.trim();
-        let headerHtml = "";
-        if (text.includes("道標")) headerHtml = "<div class='custom-layer-header' style='margin:18px 0 10px 0;'><hr style='margin:0 0 12px 0; border:0; border-top:1px solid #ddd;'><div style='font-size:1.05em; font-weight:bold; color:#1565C0;'>【基本探索】</div></div>";
-        else if (text.includes("景観地区")) headerHtml = "<div class='custom-layer-header' style='margin:18px 0 10px 0;'><hr style='margin:0 0 12px 0; border:0; border-top:1px solid #ddd;'><div style='font-size:1.05em; font-weight:bold; color:#E65100;'>【広域地域データ】</div></div>";
-        else if (text.includes("喫茶店")) headerHtml = "<div class='custom-layer-header' style='margin:18px 0 10px 0;'><hr style='margin:0 0 12px 0; border:0; border-top:1px solid #ddd;'><div style='font-size:1.05em; font-weight:bold; color:#2E7D32;'>【上級者向け】</div></div>";
-        else if (text.includes("トレンド")) headerHtml = "<div class='custom-layer-header' style='margin:18px 0 10px 0;'><hr style='margin:0 0 12px 0; border:0; border-top:1px solid #ddd;'><div style='font-size:1.05em; font-weight:bold; color:#8e44ad;'>【実験機能】</div></div>";
-        else if (text.includes("ユーザー投稿")) headerHtml = "<div class='custom-layer-header' style='margin:18px 0 10px 0;'><hr style='margin:0 0 12px 0; border:0; border-top:1px solid #ddd;'><div style='font-size:1.05em; font-weight:bold; color:#e67e22;'>【コミュニティ】</div></div>";
-        else if (text.includes("万博")) headerHtml = "<div class='custom-layer-header' style='margin:18px 0 10px 0;'><hr style='margin:0 0 12px 0; border:0; border-top:1px solid #ddd;'><div style='font-size:1.05em; font-weight:bold; color:#d35400;'>【特別イベント】</div></div>";
-        
-        if (headerHtml) label.insertAdjacentHTML('beforebegin', headerHtml);
-    });
-}
-insertCategoryHeaders();
-map.on('layeradd layerremove', () => setTimeout(insertCategoryHeaders, 10));
-
-const SCAN_ZOOM = 15;
-const scanBtn = document.getElementById('scan-btn');
-function updateScanBtn() {
-    if(!scanBtn) return;
-    if (map.getZoom() >= SCAN_ZOOM) { scanBtn.classList.remove('disabled'); scanBtn.disabled = false; scanBtn.innerText = "📡 周囲をスキャン"; }
-    else { scanBtn.classList.add('disabled'); scanBtn.disabled = true; scanBtn.innerText = "もっと近づいてスキャン"; }
-}
-map.on('zoomend', updateScanBtn);
-updateScanBtn();
-
 scanBtn?.addEventListener('click', () => {
     if (map.getZoom() < SCAN_ZOOM) return;
     scanBtn.innerText = "🔄 スキャン中...";
@@ -155,11 +105,11 @@ document.addEventListener('click', (e) => {
 map.on('zoomend', function() {
     const zoom = map.getZoom();
     let size = 24;
-    if (zoom === 10) size = 10;
-    else if (zoom === 11) size = 16;
-    else if (zoom === 12) size = 21;
-    else if (zoom === 13) size = 23;
-    else if (zoom === 14) size = 25;
+    if (zoom === 10) size = 18;
+    else if (zoom === 11) size = 20;
+    else if (zoom === 12) size = 22;
+    else if (zoom === 13) size = 24;
+    else if (zoom === 14) size = 26;
     document.documentElement.style.setProperty('--myaku-size', size + 'px');
     document.body.classList.toggle('hide-myaku-large', zoom <= 9 || zoom >= 15);
 
@@ -173,11 +123,11 @@ map.on('zoomend', function() {
 (function applyInitialMyakuSize() {
     const zoom = map.getZoom();
     let size = 24;
-    if (zoom === 10) size = 10;
-    else if (zoom === 11) size = 16;
-    else if (zoom === 12) size = 21;
-    else if (zoom === 13) size = 23;
-    else if (zoom === 14) size = 25;
+    if (zoom === 10) size = 18;
+    else if (zoom === 11) size = 20;
+    else if (zoom === 12) size = 22;
+    else if (zoom === 13) size = 24;
+    else if (zoom === 14) size = 26;
     document.documentElement.style.setProperty('--myaku-size', size + 'px');
     document.body.classList.toggle('hide-myaku-large', zoom <= 9 || zoom >= 15);
 })();
