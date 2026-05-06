@@ -1,242 +1,3 @@
-/**
- * 旅人の杖 Ver 3.5 (ミャクミャク完全召喚・爆速WebP対応版)
- */
-
-const map = L.map('map', { center: [34.6937, 135.5023], zoom: 13, maxZoom: 19, zoomControl: false });
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap contributors' }).addTo(map);
-map.attributionControl.setPosition('bottomleft');
-
-// ▼ Yahoo! APIのクレジット表記用テキスト
-const yahooCredit = '<a href="https://developer.yahoo.co.jp/sitemap/">Web Services by Yahoo! JAPAN</a>';
-
-// 🛡️ 基本のピン
-const icons = {
-    red: new L.Icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png', shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png', iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34] }),
-    blue: new L.Icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png', shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png', iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34] }),
-    green: new L.Icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png', shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png', iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34] }),
-    purple: new L.Icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-violet.png', shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png', iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34] }),
-    orange: new L.Icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-orange.png', shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png', iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34] })
-};
-
-function getFeatureName(p) {
-    if (!p) return "名称未定";
-    let name = p.name || p.名称 || p.屋号 || p.地区名 || p.観光資源名 || p.P12_001 || p.指定名称 || p.文化財名 || p.通称 || "名称未定";
-    if (String(name) === "0" || name === "" || name === null) name = "名称未定";
-    if (name === "名称未定") {
-        for (let propKey in p) {
-            if (propKey.includes("名") && !propKey.includes("都道府県") && !propKey.includes("市区町村")) {
-                name = p[propKey];
-                break;
-            }
-        }
-    }
-    return name;
-}
-
-function getRouteStyle(feature) {
-    const name = getFeatureName(feature.properties);
-    if (name.includes("東海自然歩道本線以外")) return { color: "#0052cc", weight: 4, opacity: 0.8 }; 
-    if (name.includes("東海自然歩道")) return { color: "#27ae60", weight: 6, opacity: 0.9 }; 
-    
-    const palettes = { "東海道": "#0052cc", "中山道": "#d91e18", "甲州街道": "#f39c12", "奥州街道": "#8e44ad", "日光街道": "#16a085" };
-    for (let key in palettes) {
-        if (name.includes(key)) return { color: palettes[key], weight: 5, opacity: 0.8 };
-    }
-
-    const fallbackColors = ['#e6194B', '#3cb44b', '#ffe119', '#4363d8', '#f58231', '#911eb4', '#42d4f4', '#f032e6', '#bfef45', '#fabed4', '#469990', '#dcbeff', '#9A6324', '#fffac8', '#800000', '#aaffc3', '#808000', '#ffd8b1', '#000075', '#a9a9a9'];
-    let hash = 0;
-    for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
-    let color = fallbackColors[Math.abs(hash) % fallbackColors.length];
-    return { color: color, weight: 4, opacity: 0.8 };
-}
-
-const layerDefs = {
-    rel: { url: 'rel.geojson', icon: icons.blue },
-    park: { url: 'park.geojson', icon: icons.blue },
-    com: { url: 'com.geojson', icon: icons.green },
-    mus: { url: 'mus.geojson', icon: icons.green },
-    gym: { url: 'gym.geojson', icon: icons.green },
-    cul: { url: 'cul.geojson', icon: icons.green },
-    wc: { url: 'wc.geojson', isCircle: true },
-    keikan: { url: 'A35b_景観地区_近畿.geojson', style: {color: '#1E90FF', weight: 2, fillOpacity: 0.3} },
-    tree: { url: 'A35c_景観重要建造物樹木_近畿.geojson', style: {color: '#32CD32', weight: 2, fillOpacity: 0.3} },
-    fudo: { url: 'A42_歴史的風土保存区域_近畿.geojson', style: {color: '#8B4513', weight: 2, fillOpacity: 0.3} },
-    denken: { url: 'A43_伝統的建造物群保存地区_近畿.geojson', style: {color: '#800080', weight: 2, fillOpacity: 0.3} },
-    fuchi: { url: 'A44_歴史的風致重点地区_近畿.geojson', style: {color: '#FFD700', weight: 2, fillOpacity: 0.3} },
-    kanko: { url: 'P12_観光資源_近畿.geojson', isCircle: true, circleColor: '#FF8C00', style: {color: '#FF8C00', weight: 2, fillOpacity: 0.3} },
-    restaurants: { url: 'restaurant.geojson', icon: icons.orange },
-    trail: { url: 'OSM_trail.geojson', icon: icons.purple },
-    shizenhodo: { url: 'TokaiNatureTrail_Route.geojson', style: getRouteStyle },
-    gokaido: { url: 'gokaido_routes.geojson', style: getRouteStyle },
-    live_trend: { url: 'trend_spots.geojson?t=' + new Date().getTime(), category: 'trend', color: '#ff4b00' },
-    live_flower: { url: 'trend_spots.geojson?t=' + new Date().getTime(), category: 'flower', color: '#ff69b4' },
-    live_local: { url: 'trend_spots.geojson?t=' + new Date().getTime(), category: 'local', color: '#32cd32' },
-    user_spots: { url: 'user_spots.geojson?t=' + new Date().getTime(), icon: icons.orange, isUserSpot: true },
-    legacy_spots: { url: 'legacy_spots.geojson?t=' + new Date().getTime(), icon: icons.red, isLegacy: true }
-};
-
-const immediateLayers = ['keikan', 'tree', 'fudo', 'denken', 'fuchi', 'kanko', 'trail', 'shizenhodo', 'gokaido'];
-
-const rawData = {};
-const layers = {};
-let legacyClusterGroup = null; // ズーム連動のためスコープを外に出す
-Object.keys(layerDefs).forEach(key => { layers[key] = L.layerGroup(); });
-
-function repairGeoJson(data) {
-    if (!data || !data.features) return data;
-    return {
-        ...data,
-        features: data.features.map(ft => {
-            const geom = ft.geometry;
-            if (Array.isArray(geom) && geom.length === 2 &&
-                typeof geom[0] === 'number' && typeof geom[1] === 'number') {
-                return { ...ft, geometry: { type: 'Point', coordinates: geom } };
-            }
-            return ft;
-        })
-    };
-}
-
-function renderGeoJson(key, bounds = null) {
-    layers[key].clearLayers();
-    const def = layerDefs[key];
-
-    // ▼ ▼ ▼ 万博レガシー専用のクラスタリング（ミャクミャク召喚ギミック） ▼ ▼ ▼
-    if (key === 'legacy_spots') {
-        legacyClusterGroup = L.markerClusterGroup({
-            maxClusterRadius: 60,
-            iconCreateFunction: function(cluster) {
-                const childMarkers = cluster.getAllChildMarkers();
-                const count = cluster.getChildCount();
-                
-                let hasStore = false;
-                let hasKomyaku = false;
-                
-                // 🌟 ReferenceError対策：引数名を m にし、明示的な function を使用して絶対防壁を張る！
-                childMarkers.forEach(function(m) {
-                    if (m && m.feature && m.feature.properties) {
-                        const props = m.feature.properties;
-                        if (props.isStore) hasStore = true;
-                        if (props.isKomyaku) hasKomyaku = true;
-                    }
-                });
-
-                if (count >= 35) {
-                    const zoom = map.getZoom();
-                    const hidden = zoom >= 15 ? 'display:none;' : '';
-                    return L.divIcon({
-                        html: `<img src="./myaku_large.webp" class="myaku-large-img" style="transform: translate(-45%, -38%); ${hidden}">`,
-                        className: 'custom-cluster-myaku-large',
-                        iconSize: [0, 0],
-                        iconAnchor: [0, 0]
-                    });
-                } 
-                else {
-                    let imgUrl = './komyaku_red.webp';
-                    if (hasStore) imgUrl = './komyaku_blue.webp';
-                    else if (hasKomyaku) imgUrl = './komyaku_gray.webp';
-
-                    return L.divIcon({
-                        html: `<div style="position:relative; width:50px; height:50px;">
-                                   <img src="${imgUrl}" style="width:100%; height:100%; filter: drop-shadow(1px 2px 3px rgba(0,0,0,0.4));">
-                                   <div style="position:absolute; bottom:-5px; right:-5px; background:rgba(0,0,0,0.7); color:white; border-radius:50%; width:22px; height:22px; line-height:22px; text-align:center; font-size:12px; font-weight:bold;">${count}</div>
-                               </div>`,
-                        className: 'custom-cluster-komyaku',
-                        iconSize: [50, 50],
-                        iconAnchor: [25, 25]
-                    });
-                }
-            }
-        });
-
-        const geoJsonLayer = L.geoJSON(repairGeoJson(rawData[key]), {
-            pointToLayer: function(feature, latlng) {
-                let mIconUrl = './myakupin_red.webp';
-                if (feature.properties) {
-                    if (feature.properties.isStore) mIconUrl = './myakupin_blue.webp';
-                    else if (feature.properties.isKomyaku) mIconUrl = './myakupin_gray.webp';
-                }
-
-                const mIcon = L.icon({
-                    iconUrl: mIconUrl,
-                    iconSize: [30, 45],
-                    iconAnchor: [15, 45],
-                    popupAnchor: [0, -45]
-                });
-                
-                const marker = L.marker(latlng, { icon: mIcon });
-                marker.feature = feature; 
-                return marker;
-            },
-            onEachFeature: function(feature, layer) {
-                const imgHtml = feature.properties.image_url ? `<div style="text-align:center;"><img src="${feature.properties.image_url}" style="width: 100%; height: 120px; object-fit: cover; border-radius: 6px; margin-bottom: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);"></div>` : '';
-                layer.bindPopup(`<div style="min-width:200px;">${imgHtml}${feature.properties.popupContent}</div>`);
-            }
-        });
-
-        legacyClusterGroup.addLayer(geoJsonLayer);
-        layers[key].addLayer(legacyClusterGroup);
-        return; 
-    }
-    // ▲ ▲ ▲ ここまでレガシー専用処理 ▲ ▲ ▲
-
-    L.geoJSON(repairGeoJson(rawData[key]), {
-        filter: function(feature) {
-            if (key === 'live_trend' || key === 'live_flower' || key === 'live_local') {
-                if (feature.properties.category !== def.category) return false;
-            }
-            if (bounds && feature.geometry && feature.geometry.type === "Point") {
-                const latlng = L.latLng(feature.geometry.coordinates[1], feature.geometry.coordinates[0]);
-                return bounds.contains(latlng);
-            }
-            return true;
-        },
-        pointToLayer: function(feature, latlng) {
-            if (key === 'live_trend' || key === 'live_flower' || key === 'live_local') {
-                const imgHtml = feature.properties.image_url ? `<img src="${feature.properties.image_url}" style="width: 100%; height: 120px; object-fit: cover; border-radius: 6px; margin-top: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);"><br>` : '';
-                const linkHtml = feature.properties.link ? `<br><a href="${feature.properties.link}" target="_blank" style="display:inline-block; margin-top:8px; padding:6px 12px; background:${def.color}; color:#fff; text-decoration:none; border-radius:6px; font-size:0.9em; font-weight:bold; box-shadow:0 2px 4px rgba(0,0,0,0.2);">📰 ニュースを見る</a>` : '';
-
-                return L.circleMarker(latlng, {
-                    radius: 12, color: '#ffffff', weight: 2, fillColor: def.color, fillOpacity: 0.8
-                }).bindPopup(`
-                    <div style="text-align:center;">
-                        <b style="color:${def.color}; font-size:1.1em;">【${feature.properties.category}】</b><br>
-                        <span style="font-size:1.2em; font-weight:bold;">${feature.properties.trend_word}</span><br>
-                        <span style="color:#666;">📍 ${feature.properties.name}</span><br>
-                        ${imgHtml}
-                        ${linkHtml}
-                    </div>
-                `);
-            }
-            if(def.isCircle) return L.circleMarker(latlng, { radius: 6, fillColor: def.circleColor || 'red', color: '#fff', weight: 2, fillOpacity: 0.8 });
-            return L.marker(latlng, { icon: def.icon || new L.Icon.Default() });
-        },
-        style: def.style,
-        onEachFeature: function(feature, layer) {
-            if (key === 'live_trend' || key === 'live_flower' || key === 'live_local') return;
-            if (def.isUserSpot) {
-                const name = feature.properties.name || "名称未定";
-                const reason = feature.properties.reason || "";
-                layer.bindPopup(`
-                    <div style="text-align:center; min-width:180px;">
-                        <b style="color:#e67e22; font-size:1.1em;">【🗣️ ユーザー投稿】</b><br>
-                        <span style="font-size:1.2em; font-weight:bold;">${name}</span><br>
-                        <hr style="margin:8px 0; border:0; border-top:1px dashed #ccc;">
-                        <span style="color:#555; font-size:0.9em;">${reason}</span>
-                    </div>
-                `);
-                return;
-            }
-            const name = getFeatureName(feature.properties);
-            layer.bindPopup(`<strong>${name}</strong>`);
-        }
-    }).addTo(layers[key]);
-}
-
-async function fetchAllData() {
-    for (const [key, def] of Object.entries(layerDefs)) {
-        try {
-            const res = await fetch(def.url);
             if(res.ok) {
                 rawData[key] = await res.json();
                 if (immediateLayers.includes(key)) renderGeoJson(key);
@@ -393,11 +154,14 @@ document.addEventListener('click', (e) => {
 
 map.on('zoomend', function() {
     const zoom = map.getZoom();
-    let size = 30;
-    if (zoom <= 12) size = 30;
-    else if (zoom === 13) size = 35;
-    else if (zoom === 14) size = 40;
+    let size = 24;
+    if (zoom === 10) size = 10;
+    else if (zoom === 11) size = 16;
+    else if (zoom === 12) size = 21;
+    else if (zoom === 13) size = 23;
+    else if (zoom === 14) size = 25;
     document.documentElement.style.setProperty('--myaku-size', size + 'px');
+    document.body.classList.toggle('hide-myaku-large', zoom <= 9 || zoom >= 15);
 
     // legacyClusterGroupのアイコンを再生成させる（iconCreateFunctionを再呼び出し）
     if (legacyClusterGroup) {
@@ -408,9 +172,12 @@ map.on('zoomend', function() {
 // 初期ロード時はzoomendが発火しないため、起動直後に1度だけ実行
 (function applyInitialMyakuSize() {
     const zoom = map.getZoom();
-    let size = 30;
-    if (zoom <= 12) size = 30;
-    else if (zoom === 13) size = 35;
-    else if (zoom === 14) size = 40;
+    let size = 24;
+    if (zoom === 10) size = 10;
+    else if (zoom === 11) size = 16;
+    else if (zoom === 12) size = 21;
+    else if (zoom === 13) size = 23;
+    else if (zoom === 14) size = 25;
     document.documentElement.style.setProperty('--myaku-size', size + 'px');
+    document.body.classList.toggle('hide-myaku-large', zoom <= 9 || zoom >= 15);
 })();
