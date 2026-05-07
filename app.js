@@ -6,17 +6,6 @@ const map = L.map('map', { center: [34.6937, 135.5023], zoom: 13, maxZoom: 19, z
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap contributors' }).addTo(map);
 map.attributionControl.setPosition('bottomleft');
 
-const zoomDebug = document.createElement('div');
-zoomDebug.id = 'zoom-debug';
-zoomDebug.setAttribute('aria-live', 'polite');
-document.body.appendChild(zoomDebug);
-
-function updateZoomDebug() {
-    zoomDebug.textContent = `Zoom: ${map.getZoom()}`;
-}
-map.on('zoomend', updateZoomDebug);
-updateZoomDebug();
-
 // ▼ Yahoo! APIのクレジット表記用テキスト
 const yahooCredit = '<a href="https://developer.yahoo.co.jp/sitemap/">Web Services by Yahoo! JAPAN</a>';
 
@@ -90,9 +79,6 @@ const immediateLayers = ['keikan', 'tree', 'fudo', 'denken', 'fuchi', 'kanko', '
 
 const rawData = {};
 const layers = {};
-let legacyClusterGroup = null; // ズーム連動のためスコープを外に出す
-let myakuLargeMarker = null;
-let legacyGeoJsonLayer = null;
 Object.keys(layerDefs).forEach(key => { layers[key] = L.layerGroup(); });
 
 function repairGeoJson(data) {
@@ -110,67 +96,14 @@ function repairGeoJson(data) {
     };
 }
 
-function getLegacyClusterCenterLatLng() {
-    if (!legacyClusterGroup || !legacyGeoJsonLayer) return null;
-
-    let firstMarker = null;
-    legacyGeoJsonLayer.eachLayer(layer => {
-        if (!firstMarker) firstMarker = layer;
-    });
-    if (!firstMarker) return null;
-
-    const visibleParent = legacyClusterGroup.getVisibleParent(firstMarker);
-    return visibleParent ? visibleParent.getLatLng() : firstMarker.getLatLng();
-}
-
-function updateStandaloneMyakuLarge() {
-    if (!layers.legacy_spots) return;
-    if (myakuLargeMarker) {
-        layers.legacy_spots.removeLayer(myakuLargeMarker);
-        myakuLargeMarker = null;
-    }
-
-    if (map.getZoom() > 3 || !rawData.legacy_spots) return;
-
-    const center = getLegacyClusterCenterLatLng();
-    if (!center) return;
-
-    myakuLargeMarker = L.marker(center, {
-        interactive: false,
-        icon: L.divIcon({
-            html: `<img src="./myaku_large.webp" class="myaku-large-img" style="width:100px; height:auto;">`,
-            className: 'standalone-myaku-large',
-            iconSize: [100, 100],
-            iconAnchor: [50, 50]
-        })
-    });
-    layers.legacy_spots.addLayer(myakuLargeMarker);
-}
-
-function updateLegacyClusterVisibility() {
-    if (!layers.legacy_spots || !legacyClusterGroup) return;
-
-    if (map.getZoom() <= 3) {
-        if (layers.legacy_spots.hasLayer(legacyClusterGroup)) {
-            layers.legacy_spots.removeLayer(legacyClusterGroup);
-        }
-        return;
-    }
-
-    if (!layers.legacy_spots.hasLayer(legacyClusterGroup)) {
-        layers.legacy_spots.addLayer(legacyClusterGroup);
-    }
-}
-
 function renderGeoJson(key, bounds = null) {
     layers[key].clearLayers();
     const def = layerDefs[key];
 
     // ▼ ▼ ▼ 万博レガシー専用のクラスタリング（ミャクミャク召喚ギミック） ▼ ▼ ▼
     if (key === 'legacy_spots') {
-        legacyClusterGroup = L.markerClusterGroup({
+        const clusterGroup = L.markerClusterGroup({
             maxClusterRadius: 60,
-            showCoverageOnHover: false,
             iconCreateFunction: function(cluster) {
                 const childMarkers = cluster.getAllChildMarkers();
                 const count = cluster.getChildCount();
@@ -187,19 +120,31 @@ function renderGeoJson(key, bounds = null) {
                     }
                 });
 
-                let imgUrl = './komyaku_red.webp';
-                if (hasStore) imgUrl = './komyaku_blue.webp';
-                else if (hasKomyaku) imgUrl = './komyaku_gray.webp';
+                if (count >= 35) {
+                    const zoom = map.getZoom();
+                    const hidden = zoom >= 8 ? 'display:none;' : '';
+                    return L.divIcon({
+                        html: `<img src="./myaku_large.webp" class="myaku-large-img" style="transform: translate(-45%, -38%); ${hidden}">`,
+                        className: 'custom-cluster-myaku-large',
+                        iconSize: [0, 0],
+                        iconAnchor: [0, 0]
+                    });
+                } 
+                else {
+                    let imgUrl = './komyaku_red.webp';
+                    if (hasStore) imgUrl = './komyaku_blue.webp';
+                    else if (hasKomyaku) imgUrl = './komyaku_gray.webp';
 
-                return L.divIcon({
-                    html: `<div style="position:relative; width:50px; height:50px;">
-                               <img src="${imgUrl}" style="width:100%; height:100%; object-fit:contain; filter: drop-shadow(1px 2px 3px rgba(0,0,0,0.4));">
-                               <div style="position:absolute; bottom:-5px; right:-5px; background:rgba(0,0,0,0.7); color:white; border-radius:50%; width:22px; height:22px; line-height:22px; text-align:center; font-size:12px; font-weight:bold;">${count}</div>
-                           </div>`,
-                    className: 'custom-cluster-komyaku',
-                    iconSize: [50, 50],
-                    iconAnchor: [25, 25]
-                });
+                    return L.divIcon({
+                        html: `<div style="position:relative; width:50px; height:50px;">
+                                   <img src="${imgUrl}" style="width:100%; height:100%; filter: drop-shadow(1px 2px 3px rgba(0,0,0,0.4));">
+                                   <div style="position:absolute; bottom:-5px; right:-5px; background:rgba(0,0,0,0.7); color:white; border-radius:50%; width:22px; height:22px; line-height:22px; text-align:center; font-size:12px; font-weight:bold;">${count}</div>
+                               </div>`,
+                        className: 'custom-cluster-komyaku',
+                        iconSize: [50, 50],
+                        iconAnchor: [25, 25]
+                    });
+                }
             }
         });
 
@@ -227,12 +172,9 @@ function renderGeoJson(key, bounds = null) {
                 layer.bindPopup(`<div style="min-width:200px;">${imgHtml}${feature.properties.popupContent}</div>`);
             }
         });
-        legacyGeoJsonLayer = geoJsonLayer;
 
-        legacyClusterGroup.addLayer(geoJsonLayer);
-        layers[key].addLayer(legacyClusterGroup);
-        updateLegacyClusterVisibility();
-        setTimeout(updateStandaloneMyakuLarge, 0);
+        clusterGroup.addLayer(geoJsonLayer);
+        layers[key].addLayer(clusterGroup);
         return; 
     }
     // ▲ ▲ ▲ ここまでレガシー専用処理 ▲ ▲ ▲
@@ -290,22 +232,16 @@ function renderGeoJson(key, bounds = null) {
     }).addTo(layers[key]);
 }
 
-async function fetchLayerData(key, def) {
-    try {
-        const res = await fetch(def.url);
-        if (!res.ok) return;
-
-        rawData[key] = await res.json();
-        if (immediateLayers.includes(key) || map.hasLayer(layers[key])) {
-            renderGeoJson(key);
-        }
-    } catch (e) {
-        console.error(`Failed to load ${key}:`, e);
-    }
-}
-
 async function fetchAllData() {
-    await Promise.all(Object.entries(layerDefs).map(([key, def]) => fetchLayerData(key, def)));
+    for (const [key, def] of Object.entries(layerDefs)) {
+        try {
+            const res = await fetch(def.url);
+            if(res.ok) {
+                rawData[key] = await res.json();
+                if (immediateLayers.includes(key)) renderGeoJson(key);
+            }
+        } catch (e) { console.error(`Failed to load ${key}:`, e); }
+    }
 }
 fetchAllData();
 
@@ -455,21 +391,17 @@ document.addEventListener('click', (e) => {
 });
 
 map.on('zoomend', function() {
-    const size = 100;
+    const zoom = map.getZoom();
+    let size = 100;
+    if (zoom <= 12) size = 56;
+    else if (zoom === 13) size = 72;
+    else if (zoom === 14) size = 96;
+    else if (zoom >= 15) size = 128;
     document.documentElement.style.setProperty('--myaku-size', size + 'px');
 
-    // legacyClusterGroupのアイコンを再生成させる（iconCreateFunctionを再呼び出し）
-    if (legacyClusterGroup) {
-        legacyClusterGroup.refreshClusters();
-    }
-    updateLegacyClusterVisibility();
-    setTimeout(updateStandaloneMyakuLarge, 0);
+    // ズーム8以上でmyaku_largeを非表示
+    const myakuEls = document.querySelectorAll('.custom-cluster-myaku-large');
+    myakuEls.forEach(el => {
+        el.style.display = zoom >= 8 ? 'none' : '';
+    });
 });
-
-// 初期ロード時はzoomendが発火しないため、起動直後に1度だけ実行
-(function applyInitialMyakuSize() {
-    const size = 100;
-    document.documentElement.style.setProperty('--myaku-size', size + 'px');
-    updateLegacyClusterVisibility();
-    updateStandaloneMyakuLarge();
-})();
