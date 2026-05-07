@@ -341,8 +341,8 @@ const wideAreaAutoZoomKeys = new Set([
 
 function autoZoomForWideAreaLayer(layer) {
     const key = Object.keys(layers).find(layerKey => layers[layerKey] === layer);
-    if (wideAreaAutoZoomKeys.has(key) && map.getZoom() !== 5) {
-        map.setZoom(5);
+    if (wideAreaAutoZoomKeys.has(key) && map.getZoom() !== 7) {
+        map.setZoom(7);
     }
 }
 
