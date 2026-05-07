@@ -202,6 +202,12 @@ function renderGeoJson(key, bounds = null) {
                 });
             }
         });
+        legacyClusterGroup.on('spiderfied', function(e) {
+            if (e.cluster && e.cluster._icon) e.cluster._icon.style.display = 'none';
+        });
+        legacyClusterGroup.on('unspiderfied', function(e) {
+            if (e.cluster && e.cluster._icon) e.cluster._icon.style.display = '';
+        });
 
         const geoJsonLayer = L.geoJSON(repairGeoJson(rawData[key]), {
             pointToLayer: function(feature, latlng) {
