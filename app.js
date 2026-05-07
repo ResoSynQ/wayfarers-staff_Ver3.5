@@ -87,7 +87,6 @@ const layerDefs = {
 };
 
 const immediateLayers = ['keikan', 'tree', 'fudo', 'denken', 'fuchi', 'kanko', 'trail', 'shizenhodo', 'gokaido'];
-const autoRenderWhenActiveLayers = ['live_trend', 'live_flower', 'live_local', 'user_spots', 'legacy_spots'];
 
 const rawData = {};
 const layers = {};
@@ -297,7 +296,7 @@ async function fetchLayerData(key, def) {
         if (!res.ok) return;
 
         rawData[key] = await res.json();
-        if (immediateLayers.includes(key) || (autoRenderWhenActiveLayers.includes(key) && map.hasLayer(layers[key]))) {
+        if (immediateLayers.includes(key) || map.hasLayer(layers[key])) {
             renderGeoJson(key);
         }
     } catch (e) {
@@ -387,48 +386,7 @@ map.on('overlayremove', function(e) {
     }
 });
 
-const menuBtn = document.getElementById('menu-btn');
-const layerMenu = document.querySelector('.leaflet-control-layers');
-
-function closeLayerMenu() {
-    document.body.classList.remove('menu-open');
-}
-
-menuBtn?.addEventListener('click', (e) => {
-    e.stopPropagation();
-    document.body.classList.toggle('menu-open');
-});
-
-document.addEventListener('click', (e) => {
-    if (!document.body.classList.contains('menu-open')) return;
-    if (menuBtn && menuBtn.contains(e.target)) return;
-    if (layerMenu && layerMenu.contains(e.target)) return;
-    closeLayerMenu();
-});
-
-let layerMenuTouchStartX = null;
-let layerMenuTouchStartY = null;
-layerMenu?.addEventListener('touchstart', (e) => {
-    const touch = e.touches && e.touches[0];
-    if (!touch) return;
-    layerMenuTouchStartX = touch.clientX;
-    layerMenuTouchStartY = touch.clientY;
-}, { passive: true });
-
-layerMenu?.addEventListener('touchend', (e) => {
-    if (layerMenuTouchStartX === null || layerMenuTouchStartY === null) return;
-    const touch = e.changedTouches && e.changedTouches[0];
-    if (!touch) return;
-
-    const deltaX = touch.clientX - layerMenuTouchStartX;
-    const deltaY = touch.clientY - layerMenuTouchStartY;
-    layerMenuTouchStartX = null;
-    layerMenuTouchStartY = null;
-
-    if (deltaX < -60 && Math.abs(deltaY) < 80) {
-        closeLayerMenu();
-    }
-}, { passive: true });
+document.getElementById('menu-btn')?.addEventListener('click', (e) => { e.stopPropagation(); document.body.classList.toggle('menu-open'); });
 document.getElementById('help-btn')?.addEventListener('click', () => { window.location.href = "help.html"; });
 document.getElementById('license-btn')?.addEventListener('click', () => { window.location.href = "license.html"; });
 document.getElementById('location-btn')?.addEventListener('click', () => { map.locate({setView: true, maxZoom: 16}); });
