@@ -6,6 +6,17 @@ const map = L.map('map', { center: [34.6937, 135.5023], zoom: 13, maxZoom: 19, z
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap contributors' }).addTo(map);
 map.attributionControl.setPosition('bottomleft');
 
+const zoomDebug = document.createElement('div');
+zoomDebug.id = 'zoom-debug';
+zoomDebug.setAttribute('aria-live', 'polite');
+document.body.appendChild(zoomDebug);
+
+function updateZoomDebug() {
+    zoomDebug.textContent = `Zoom: ${map.getZoom()}`;
+}
+map.on('zoomend', updateZoomDebug);
+updateZoomDebug();
+
 // ▼ Yahoo! APIのクレジット表記用テキスト
 const yahooCredit = '<a href="https://developer.yahoo.co.jp/sitemap/">Web Services by Yahoo! JAPAN</a>';
 
@@ -79,6 +90,9 @@ const immediateLayers = ['keikan', 'tree', 'fudo', 'denken', 'fuchi', 'kanko', '
 
 const rawData = {};
 const layers = {};
+let legacyClusterGroup = null; // ズーム連動のためスコープを外に出す
+let myakuLargeMarker = null;
+let legacyGeoJsonLayer = null;
 Object.keys(layerDefs).forEach(key => { layers[key] = L.layerGroup(); });
 
 function repairGeoJson(data) {
@@ -96,14 +110,67 @@ function repairGeoJson(data) {
     };
 }
 
+function getLegacyClusterCenterLatLng() {
+    if (!legacyClusterGroup || !legacyGeoJsonLayer) return null;
+
+    let firstMarker = null;
+    legacyGeoJsonLayer.eachLayer(layer => {
+        if (!firstMarker) firstMarker = layer;
+    });
+    if (!firstMarker) return null;
+
+    const visibleParent = legacyClusterGroup.getVisibleParent(firstMarker);
+    return visibleParent ? visibleParent.getLatLng() : firstMarker.getLatLng();
+}
+
+function updateStandaloneMyakuLarge() {
+    if (!layers.legacy_spots) return;
+    if (myakuLargeMarker) {
+        layers.legacy_spots.removeLayer(myakuLargeMarker);
+        myakuLargeMarker = null;
+    }
+
+    if (map.getZoom() > 3 || !rawData.legacy_spots) return;
+
+    const center = getLegacyClusterCenterLatLng();
+    if (!center) return;
+
+    myakuLargeMarker = L.marker(center, {
+        interactive: false,
+        icon: L.divIcon({
+            html: `<img src="./myaku_large.webp" class="myaku-large-img" style="width:100px; height:auto;">`,
+            className: 'standalone-myaku-large',
+            iconSize: [100, 100],
+            iconAnchor: [50, 50]
+        })
+    });
+    layers.legacy_spots.addLayer(myakuLargeMarker);
+}
+
+function updateLegacyClusterVisibility() {
+    if (!layers.legacy_spots || !legacyClusterGroup) return;
+
+    if (map.getZoom() <= 3) {
+        if (layers.legacy_spots.hasLayer(legacyClusterGroup)) {
+            layers.legacy_spots.removeLayer(legacyClusterGroup);
+        }
+        return;
+    }
+
+    if (!layers.legacy_spots.hasLayer(legacyClusterGroup)) {
+        layers.legacy_spots.addLayer(legacyClusterGroup);
+    }
+}
+
 function renderGeoJson(key, bounds = null) {
     layers[key].clearLayers();
     const def = layerDefs[key];
 
     // ▼ ▼ ▼ 万博レガシー専用のクラスタリング（ミャクミャク召喚ギミック） ▼ ▼ ▼
     if (key === 'legacy_spots') {
-        const clusterGroup = L.markerClusterGroup({
+        legacyClusterGroup = L.markerClusterGroup({
             maxClusterRadius: 60,
+            showCoverageOnHover: false,
             iconCreateFunction: function(cluster) {
                 const childMarkers = cluster.getAllChildMarkers();
                 const count = cluster.getChildCount();
@@ -120,31 +187,19 @@ function renderGeoJson(key, bounds = null) {
                     }
                 });
 
-                if (count >= 35) {
-                    const zoom = map.getZoom();
-                    const hidden = zoom >= 8 ? 'display:none;' : '';
-                    return L.divIcon({
-                        html: `<img src="./myaku_large.webp" class="myaku-large-img" style="transform: translate(-45%, -38%); ${hidden}">`,
-                        className: 'custom-cluster-myaku-large',
-                        iconSize: [0, 0],
-                        iconAnchor: [0, 0]
-                    });
-                } 
-                else {
-                    let imgUrl = './komyaku_red.webp';
-                    if (hasStore) imgUrl = './komyaku_blue.webp';
-                    else if (hasKomyaku) imgUrl = './komyaku_gray.webp';
+                let imgUrl = './komyaku_red.webp';
+                if (hasStore) imgUrl = './komyaku_blue.webp';
+                else if (hasKomyaku) imgUrl = './komyaku_gray.webp';
 
-                    return L.divIcon({
-                        html: `<div style="position:relative; width:50px; height:50px;">
-                                   <img src="${imgUrl}" style="width:100%; height:100%; filter: drop-shadow(1px 2px 3px rgba(0,0,0,0.4));">
-                                   <div style="position:absolute; bottom:-5px; right:-5px; background:rgba(0,0,0,0.7); color:white; border-radius:50%; width:22px; height:22px; line-height:22px; text-align:center; font-size:12px; font-weight:bold;">${count}</div>
-                               </div>`,
-                        className: 'custom-cluster-komyaku',
-                        iconSize: [50, 50],
-                        iconAnchor: [25, 25]
-                    });
-                }
+                return L.divIcon({
+                    html: `<div style="position:relative; width:50px; height:50px;">
+                               <img src="${imgUrl}" style="width:100%; height:100%; object-fit:contain; filter: drop-shadow(1px 2px 3px rgba(0,0,0,0.4));">
+                               <div style="position:absolute; bottom:-5px; right:-5px; background:rgba(0,0,0,0.7); color:white; border-radius:50%; width:22px; height:22px; line-height:22px; text-align:center; font-size:12px; font-weight:bold;">${count}</div>
+                           </div>`,
+                    className: 'custom-cluster-komyaku',
+                    iconSize: [50, 50],
+                    iconAnchor: [25, 25]
+                });
             }
         });
 
@@ -172,9 +227,12 @@ function renderGeoJson(key, bounds = null) {
                 layer.bindPopup(`<div style="min-width:200px;">${imgHtml}${feature.properties.popupContent}</div>`);
             }
         });
+        legacyGeoJsonLayer = geoJsonLayer;
 
-        clusterGroup.addLayer(geoJsonLayer);
-        layers[key].addLayer(clusterGroup);
+        legacyClusterGroup.addLayer(geoJsonLayer);
+        layers[key].addLayer(legacyClusterGroup);
+        updateLegacyClusterVisibility();
+        setTimeout(updateStandaloneMyakuLarge, 0);
         return; 
     }
     // ▲ ▲ ▲ ここまでレガシー専用処理 ▲ ▲ ▲
@@ -232,15 +290,30 @@ function renderGeoJson(key, bounds = null) {
     }).addTo(layers[key]);
 }
 
+async function fetchLayerData(key, def, renderAfterLoad = false) {
+    if (rawData[key]) {
+        if (renderAfterLoad) renderGeoJson(key);
+        return true;
+    }
+
+    try {
+        const res = await fetch(def.url);
+        if (!res.ok) return false;
+
+        rawData[key] = await res.json();
+        if (renderAfterLoad) {
+            renderGeoJson(key);
+        }
+        return true;
+    } catch (e) {
+        console.error(`Failed to load ${key}:`, e);
+        return false;
+    }
+}
+
 async function fetchAllData() {
-    for (const [key, def] of Object.entries(layerDefs)) {
-        try {
-            const res = await fetch(def.url);
-            if(res.ok) {
-                rawData[key] = await res.json();
-                if (immediateLayers.includes(key)) renderGeoJson(key);
-            }
-        } catch (e) { console.error(`Failed to load ${key}:`, e); }
+    for (const key of immediateLayers) {
+        await fetchLayerData(key, layerDefs[key], true);
     }
 }
 fetchAllData();
@@ -291,15 +364,24 @@ scanBtn?.addEventListener('click', () => {
     scanBtn.innerText = "🔄 スキャン中...";
     scanBtn.classList.add('disabled');
     const bounds = map.getBounds();
-    setTimeout(() => {
-        Object.keys(layerDefs).forEach(key => { if (!immediateLayers.includes(key) && map.hasLayer(layers[key]) && rawData[key]) renderGeoJson(key, bounds); });
+    setTimeout(async () => {
+        for (const key of Object.keys(layerDefs)) {
+            if (immediateLayers.includes(key) || !map.hasLayer(layers[key])) continue;
+            const loaded = await fetchLayerData(key, layerDefs[key]);
+            if (loaded && rawData[key]) renderGeoJson(key, bounds);
+        }
         scanBtn.innerText = "📡 周囲をスキャン"; scanBtn.classList.remove('disabled');
     }, 600);
 });
 
 const myakuCredit = '（画像のミャクミャク・こみゃく・こみゃくピンは二次創作です）';
 let restaurantWarningShown = false, advanceWarningShown = false;
-map.on('overlayadd', function(e) {
+map.on('overlayadd', async function(e) {
+    if (e.layer === layers.live_trend) await fetchLayerData('live_trend', layerDefs.live_trend);
+    if (e.layer === layers.live_flower) await fetchLayerData('live_flower', layerDefs.live_flower);
+    if (e.layer === layers.live_local) await fetchLayerData('live_local', layerDefs.live_local);
+    if (e.layer === layers.user_spots) await fetchLayerData('user_spots', layerDefs.user_spots);
+    if (e.layer === layers.legacy_spots) await fetchLayerData('legacy_spots', layerDefs.legacy_spots);
     if (e.name.includes('トレンド') && rawData['live_trend']) renderGeoJson('live_trend');
     if (e.name.includes('開花') && rawData['live_flower']) renderGeoJson('live_flower');
     if (e.name.includes('ローカル') && rawData['live_local']) renderGeoJson('live_local');
@@ -322,7 +404,48 @@ map.on('overlayremove', function(e) {
     }
 });
 
-document.getElementById('menu-btn')?.addEventListener('click', (e) => { e.stopPropagation(); document.body.classList.toggle('menu-open'); });
+const menuBtn = document.getElementById('menu-btn');
+const layerMenu = document.querySelector('.leaflet-control-layers');
+
+function closeLayerMenu() {
+    document.body.classList.remove('menu-open');
+}
+
+menuBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    document.body.classList.toggle('menu-open');
+});
+
+document.addEventListener('click', (e) => {
+    if (!document.body.classList.contains('menu-open')) return;
+    if (menuBtn && menuBtn.contains(e.target)) return;
+    if (layerMenu && layerMenu.contains(e.target)) return;
+    closeLayerMenu();
+});
+
+let layerMenuTouchStartX = null;
+let layerMenuTouchStartY = null;
+layerMenu?.addEventListener('touchstart', (e) => {
+    const touch = e.touches && e.touches[0];
+    if (!touch) return;
+    layerMenuTouchStartX = touch.clientX;
+    layerMenuTouchStartY = touch.clientY;
+}, { passive: true });
+
+layerMenu?.addEventListener('touchend', (e) => {
+    if (layerMenuTouchStartX === null || layerMenuTouchStartY === null) return;
+    const touch = e.changedTouches && e.changedTouches[0];
+    if (!touch) return;
+
+    const deltaX = touch.clientX - layerMenuTouchStartX;
+    const deltaY = touch.clientY - layerMenuTouchStartY;
+    layerMenuTouchStartX = null;
+    layerMenuTouchStartY = null;
+
+    if (deltaX < -60 && Math.abs(deltaY) < 80) {
+        closeLayerMenu();
+    }
+}, { passive: true });
 document.getElementById('help-btn')?.addEventListener('click', () => { window.location.href = "help.html"; });
 document.getElementById('license-btn')?.addEventListener('click', () => { window.location.href = "license.html"; });
 document.getElementById('location-btn')?.addEventListener('click', () => { map.locate({setView: true, maxZoom: 16}); });
@@ -391,17 +514,21 @@ document.addEventListener('click', (e) => {
 });
 
 map.on('zoomend', function() {
-    const zoom = map.getZoom();
-    let size = 100;
-    if (zoom <= 12) size = 56;
-    else if (zoom === 13) size = 72;
-    else if (zoom === 14) size = 96;
-    else if (zoom >= 15) size = 128;
+    const size = 100;
     document.documentElement.style.setProperty('--myaku-size', size + 'px');
 
-    // ズーム8以上でmyaku_largeを非表示
-    const myakuEls = document.querySelectorAll('.custom-cluster-myaku-large');
-    myakuEls.forEach(el => {
-        el.style.display = zoom >= 8 ? 'none' : '';
-    });
+    // legacyClusterGroupのアイコンを再生成させる（iconCreateFunctionを再呼び出し）
+    if (legacyClusterGroup) {
+        legacyClusterGroup.refreshClusters();
+    }
+    updateLegacyClusterVisibility();
+    setTimeout(updateStandaloneMyakuLarge, 0);
 });
+
+// 初期ロード時はzoomendが発火しないため、起動直後に1度だけ実行
+(function applyInitialMyakuSize() {
+    const size = 100;
+    document.documentElement.style.setProperty('--myaku-size', size + 'px');
+    updateLegacyClusterVisibility();
+    updateStandaloneMyakuLarge();
+})();

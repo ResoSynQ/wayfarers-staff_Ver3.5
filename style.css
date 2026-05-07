@@ -26,6 +26,25 @@ body, html, #map {
     font-size: 22px; 
 }
 
+#zoom-debug {
+    position: fixed;
+    top: 125px;
+    right: 15px;
+    z-index: 900;
+    min-width: 74px;
+    padding: 7px 10px;
+    box-sizing: border-box;
+    border: 2px solid rgba(0,0,0,0.2);
+    border-radius: 8px;
+    background: rgba(255,255,255,0.95);
+    color: #111;
+    font-size: 14px;
+    font-weight: bold;
+    text-align: center;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+    pointer-events: none;
+}
+
 /* 🚪 スライドメニュー */
 .leaflet-control-layers {
     position: fixed !important; top: 0 !important; left: -320px !important; 
@@ -111,6 +130,6 @@ body.menu-open .leaflet-control-layers { left: 0 !important; }
 }
 
 /* myaku_large を最前面レイヤーに */
-.custom-cluster-myaku-large {
+.standalone-myaku-large {
   z-index: 9999 !important;
 }
