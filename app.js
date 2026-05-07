@@ -87,6 +87,7 @@ const layerDefs = {
 };
 
 const immediateLayers = ['keikan', 'tree', 'fudo', 'denken', 'fuchi', 'kanko', 'trail', 'shizenhodo', 'gokaido'];
+const autoRenderWhenActiveLayers = ['live_trend', 'live_flower', 'live_local', 'user_spots', 'legacy_spots'];
 
 const rawData = {};
 const layers = {};
@@ -296,7 +297,7 @@ async function fetchLayerData(key, def) {
         if (!res.ok) return;
 
         rawData[key] = await res.json();
-        if (immediateLayers.includes(key) || map.hasLayer(layers[key])) {
+        if (immediateLayers.includes(key) || (autoRenderWhenActiveLayers.includes(key) && map.hasLayer(layers[key]))) {
             renderGeoJson(key);
         }
     } catch (e) {

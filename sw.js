@@ -1,6 +1,6 @@
 // --- 『旅人の杖と救いの泉』 Service Worker (Ver 1.0) ---
 
-const CACHE_NAME = 'wayfarers-staff-cache-v34'; 
+const CACHE_NAME = 'wayfarers-staff-cache-v35'; 
 
 const CACHE_ASSETS = [
     './',
