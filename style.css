@@ -36,6 +36,12 @@ body, html, #map {
     color: white;
     border-color: #f59e0b;
 }
+#draw-select-btn.disabled {
+    background: #888888;
+    color: white;
+    cursor: not-allowed;
+    opacity: 0.8;
+}
 
 #zoom-debug {
     position: fixed;

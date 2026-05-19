@@ -494,6 +494,18 @@ function setDrawPanel(summary, counts = {}) {
     breakdownEl.innerHTML = rows.length ? rows.join('') : '';
 }
 
+function canUseDrawSelection() {
+    return map.getZoom() >= SCAN_ZOOM;
+}
+
+function updateDrawSelectBtn() {
+    if (!drawSelectBtn) return;
+    const unavailable = !canUseDrawSelection() && !drawSelectionActive && !document.body.classList.contains('draw-results-visible');
+    drawSelectBtn.disabled = unavailable;
+    drawSelectBtn.classList.toggle('disabled', unavailable);
+    drawSelectBtn.title = unavailable ? "ズーム15以上で利用できます" : "ペンで囲って表示";
+}
+
 function hideNormalLayersForDraw() {
     drawSavedVisibleLayers = new Set();
     Object.keys(layers).forEach(key => {
@@ -556,6 +568,12 @@ async function renderDrawSelectionResults(polygon) {
 }
 
 function startDrawSelectionMode() {
+    if (!canUseDrawSelection()) {
+        alert("ペンで囲って表示は、ズーム15以上で利用できます。もう少し近づいてください。");
+        updateDrawSelectBtn();
+        return;
+    }
+
     drawSelectionActive = true;
     drawPoints = [];
     drawPointerId = null;
@@ -592,6 +610,20 @@ function stopDrawSelectionMode(restoreLayers = true) {
 
     if (restoreLayers) restoreNormalLayersAfterDraw();
     else drawSelectionLayer.clearLayers();
+    updateDrawSelectBtn();
+}
+
+function enforceDrawZoomLimit() {
+    if (canUseDrawSelection()) {
+        updateDrawSelectBtn();
+        return;
+    }
+
+    if (drawSelectionActive || document.body.classList.contains('draw-results-visible')) {
+        stopDrawSelectionMode(true);
+    } else {
+        updateDrawSelectBtn();
+    }
 }
 
 function clientPointToLatLng(clientX, clientY) {
@@ -724,7 +756,9 @@ function updateScanBtn() {
     else { scanBtn.classList.add('disabled'); scanBtn.disabled = true; scanBtn.innerText = "もっと近づいてスキャン"; }
 }
 map.on('zoomend', updateScanBtn);
+map.on('zoomend', enforceDrawZoomLimit);
 updateScanBtn();
+updateDrawSelectBtn();
 
 scanBtn?.addEventListener('click', () => {
     if (map.getZoom() < SCAN_ZOOM) return;
