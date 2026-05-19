@@ -22,12 +22,20 @@
 <button id="menu-btn" title="メニュー">☰</button>
 <button id="location-btn" title="現在地へ移動">🧭</button>
 <button id="reload-btn" title="最新の熱気を取得">↻</button>
+<button id="draw-select-btn" title="ペンで囲って表示">✎</button>
 
 <button id="scan-btn" class="scan-button">もっと近づいてスキャン</button>
 
     <button id="request-btn" class="floating-btn" title="スポット申請" style="bottom: 130px; background-color: #e67e22; color: white;">📍</button>
     <button id="help-btn" class="floating-btn" title="ヘルプ">❓</button>
     <button id="license-btn" class="floating-btn" title="ライセンス">📜</button>
+
+    <div id="draw-result-panel" aria-live="polite">
+        <div class="draw-panel-title">囲み表示</div>
+        <div id="draw-result-summary">ペンで地図を囲ってください</div>
+        <div id="draw-result-breakdown"></div>
+        <button id="draw-clear-btn" type="button">通常表示に戻す</button>
+    </div>
 
     <div id="loading-screen">
         <img src="image_3.webp" id="loading-logo" alt="旅人の杖 ロゴ">

@@ -94,6 +94,12 @@ let legacyClusterGroup = null; // ズーム連動のためスコープを外に�
 let myakuLargeMarker = null;
 let legacyGeoJsonLayer = null;
 Object.keys(layerDefs).forEach(key => { layers[key] = L.layerGroup(); });
+const drawSelectionLayer = L.layerGroup();
+let drawPathLayer = null;
+let drawSelectionActive = false;
+let drawSavedVisibleLayers = new Set();
+let drawPoints = [];
+let drawPointerId = null;
 
 function repairGeoJson(data) {
     if (!data || !data.features) return data;
@@ -331,6 +337,347 @@ const overlayMaps = {
     "🌍 トレンド": layers.live_trend, "🌸 開花": layers.live_flower, "😊 ローカルニュース": layers.live_local,
     "🗣️ ユーザー投稿スポット": layers.user_spots, "🎡 万博・レガシー": layers.legacy_spots
 };
+const layerLabels = Object.fromEntries(
+    Object.entries(overlayMaps).map(([label, layer]) => {
+        const key = Object.keys(layers).find(layerKey => layers[layerKey] === layer);
+        return [key, label];
+    }).filter(([key]) => key)
+);
+const drawSelectableKeys = [
+    'rel', 'park', 'com', 'mus', 'gym', 'cul', 'wc', 'kanko',
+    'restaurants', 'live_trend', 'live_flower', 'live_local',
+    'user_spots', 'legacy_spots'
+];
+
+function pointInPolygon(point, polygon) {
+    const x = point.lng;
+    const y = point.lat;
+    let inside = false;
+
+    for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+        const xi = polygon[i].lng;
+        const yi = polygon[i].lat;
+        const xj = polygon[j].lng;
+        const yj = polygon[j].lat;
+        const intersects = ((yi > y) !== (yj > y)) &&
+            (x < (xj - xi) * (y - yi) / ((yj - yi) || Number.EPSILON) + xi);
+        if (intersects) inside = !inside;
+    }
+
+    return inside;
+}
+
+function getLatLngBoundsFromPolygon(polygon) {
+    let minLat = Infinity;
+    let maxLat = -Infinity;
+    let minLng = Infinity;
+    let maxLng = -Infinity;
+
+    polygon.forEach(point => {
+        minLat = Math.min(minLat, point.lat);
+        maxLat = Math.max(maxLat, point.lat);
+        minLng = Math.min(minLng, point.lng);
+        maxLng = Math.max(maxLng, point.lng);
+    });
+
+    return { minLat, maxLat, minLng, maxLng };
+}
+
+function pointInBounds(point, bounds) {
+    return point.lat >= bounds.minLat &&
+        point.lat <= bounds.maxLat &&
+        point.lng >= bounds.minLng &&
+        point.lng <= bounds.maxLng;
+}
+
+function getFeatureLatLng(feature) {
+    if (!feature || !feature.geometry || feature.geometry.type !== "Point") return null;
+    const coords = feature.geometry.coordinates;
+    if (!Array.isArray(coords) || coords.length < 2) return null;
+    if (typeof coords[0] !== 'number' || typeof coords[1] !== 'number') return null;
+    return L.latLng(coords[1], coords[0]);
+}
+
+function featureMatchesLayerCategory(key, feature) {
+    const def = layerDefs[key];
+    if (!def || !feature || !feature.properties) return true;
+    if (key === 'live_trend' || key === 'live_flower' || key === 'live_local') {
+        return feature.properties.category === def.category;
+    }
+    return true;
+}
+
+function createDrawSelectionMarker(key, feature, latlng) {
+    const def = layerDefs[key];
+
+    if (key === 'legacy_spots') {
+        let mIconUrl = './myakupin_red.webp';
+        if (feature.properties) {
+            if (feature.properties.isStore) mIconUrl = './myakupin_blue.webp';
+            else if (feature.properties.isKomyaku) mIconUrl = './myakupin_gray.webp';
+        }
+        const marker = L.marker(latlng, {
+            icon: L.icon({
+                iconUrl: mIconUrl,
+                iconSize: [30, 45],
+                iconAnchor: [15, 45],
+                popupAnchor: [0, -45]
+            })
+        });
+        const imgHtml = feature.properties.image_url ? `<div style="text-align:center;"><img src="${feature.properties.image_url}" style="width: 100%; height: 120px; object-fit: cover; border-radius: 6px; margin-bottom: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);"></div>` : '';
+        marker.bindPopup(`<div style="min-width:200px;">${imgHtml}${feature.properties.popupContent || getFeatureName(feature.properties)}</div>`);
+        return marker;
+    }
+
+    if (key === 'live_trend' || key === 'live_flower' || key === 'live_local') {
+        const imgHtml = feature.properties.image_url ? `<img src="${feature.properties.image_url}" style="width: 100%; height: 120px; object-fit: cover; border-radius: 6px; margin-top: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);"><br>` : '';
+        const linkHtml = feature.properties.link ? `<br><a href="${feature.properties.link}" target="_blank" style="display:inline-block; margin-top:8px; padding:6px 12px; background:${def.color}; color:#fff; text-decoration:none; border-radius:6px; font-size:0.9em; font-weight:bold; box-shadow:0 2px 4px rgba(0,0,0,0.2);">📰 ニュースを見る</a>` : '';
+        return L.circleMarker(latlng, {
+            radius: 12,
+            color: '#ffffff',
+            weight: 2,
+            fillColor: def.color,
+            fillOpacity: 0.8
+        }).bindPopup(`
+            <div style="text-align:center;">
+                <b style="color:${def.color}; font-size:1.1em;">【${feature.properties.category}】</b><br>
+                <span style="font-size:1.2em; font-weight:bold;">${feature.properties.trend_word}</span><br>
+                <span style="color:#666;">📍 ${feature.properties.name}</span><br>
+                ${imgHtml}
+                ${linkHtml}
+            </div>
+        `);
+    }
+
+    if (def.isUserSpot) {
+        const name = feature.properties.name || "名称未定";
+        const reason = feature.properties.reason || "";
+        return L.marker(latlng, { icon: def.icon || new L.Icon.Default() }).bindPopup(`
+            <div style="text-align:center; min-width:180px;">
+                <b style="color:#e67e22; font-size:1.1em;">【🗣️ ユーザー投稿】</b><br>
+                <span style="font-size:1.2em; font-weight:bold;">${name}</span><br>
+                <hr style="margin:8px 0; border:0; border-top:1px dashed #ccc;">
+                <span style="color:#555; font-size:0.9em;">${reason}</span>
+            </div>
+        `);
+    }
+
+    if (def.isCircle) {
+        return L.circleMarker(latlng, {
+            radius: 6,
+            fillColor: def.circleColor || 'red',
+            color: '#fff',
+            weight: 2,
+            fillOpacity: 0.8
+        }).bindPopup(`<strong>${getFeatureName(feature.properties)}</strong>`);
+    }
+
+    return L.marker(latlng, { icon: def.icon || new L.Icon.Default() })
+        .bindPopup(`<strong>${getFeatureName(feature.properties)}</strong>`);
+}
+
+function setDrawPanel(summary, counts = {}) {
+    const summaryEl = document.getElementById('draw-result-summary');
+    const breakdownEl = document.getElementById('draw-result-breakdown');
+    if (summaryEl) summaryEl.textContent = summary;
+    if (!breakdownEl) return;
+
+    const rows = Object.entries(counts)
+        .filter(([, count]) => count > 0)
+        .sort((a, b) => b[1] - a[1])
+        .map(([key, count]) => `
+            <div class="draw-breakdown-row">
+                <span class="draw-breakdown-label">${layerLabels[key] || key}</span>
+                <span class="draw-breakdown-count">${count}件</span>
+            </div>
+        `);
+    breakdownEl.innerHTML = rows.length ? rows.join('') : '';
+}
+
+function hideNormalLayersForDraw() {
+    drawSavedVisibleLayers = new Set();
+    Object.keys(layers).forEach(key => {
+        if (map.hasLayer(layers[key])) {
+            drawSavedVisibleLayers.add(key);
+            map.removeLayer(layers[key]);
+        }
+    });
+    if (!map.hasLayer(drawSelectionLayer)) drawSelectionLayer.addTo(map);
+}
+
+function restoreNormalLayersAfterDraw() {
+    drawSelectionLayer.clearLayers();
+    drawSavedVisibleLayers.forEach(key => {
+        if (layers[key] && !map.hasLayer(layers[key])) {
+            layers[key].addTo(map);
+        }
+    });
+    drawSavedVisibleLayers.clear();
+}
+
+async function renderDrawSelectionResults(polygon) {
+    drawSelectionLayer.clearLayers();
+    setDrawPanel("囲み範囲のデータを確認中...");
+
+    const counts = {};
+    let total = 0;
+    const polygonBounds = getLatLngBoundsFromPolygon(polygon);
+
+    for (const key of drawSelectableKeys) {
+        setDrawPanel(`${layerLabels[key] || key} を確認中...`);
+        await fetchLayerData(key, layerDefs[key]);
+        if (!rawData[key]) continue;
+
+        const repaired = repairGeoJson(rawData[key]);
+        const features = repaired.features || [];
+
+        for (let i = 0; i < features.length; i += 1) {
+            const feature = features[i];
+            if (!featureMatchesLayerCategory(key, feature)) continue;
+            const latlng = getFeatureLatLng(feature);
+            if (!latlng || !pointInBounds(latlng, polygonBounds) || !pointInPolygon(latlng, polygon)) continue;
+
+            drawSelectionLayer.addLayer(createDrawSelectionMarker(key, feature, latlng));
+            counts[key] = (counts[key] || 0) + 1;
+            total += 1;
+
+            if (i > 0 && i % 500 === 0) {
+                await new Promise(resolve => setTimeout(resolve, 0));
+            }
+        }
+    }
+
+    if (total === 0) {
+        setDrawPanel("囲み範囲内に表示できるピンはありませんでした。もう少し広く囲ってみてください。");
+        return;
+    }
+
+    setDrawPanel(`囲み範囲内に ${total} 件のピンがあります。`, counts);
+}
+
+function startDrawSelectionMode() {
+    drawSelectionActive = true;
+    drawPoints = [];
+    drawPointerId = null;
+    map.closePopup();
+    closeLayerMenu();
+    hideNormalLayersForDraw();
+    document.body.classList.add('draw-selecting');
+    document.body.classList.remove('draw-results-visible');
+    document.getElementById('draw-select-btn')?.classList.add('active');
+    setDrawPanel("ペンで地図を囲ってください。指を離すと、その範囲だけ表示します。");
+
+    map.dragging.disable();
+    map.doubleClickZoom.disable();
+    map.scrollWheelZoom.disable();
+    if (map.touchZoom) map.touchZoom.disable();
+}
+
+function stopDrawSelectionMode(restoreLayers = true) {
+    drawSelectionActive = false;
+    drawPoints = [];
+    drawPointerId = null;
+    if (drawPathLayer) {
+        map.removeLayer(drawPathLayer);
+        drawPathLayer = null;
+    }
+    document.body.classList.remove('draw-selecting', 'draw-results-visible');
+    document.getElementById('draw-select-btn')?.classList.remove('active');
+    setDrawPanel("ペンで地図を囲ってください");
+
+    map.dragging.enable();
+    map.doubleClickZoom.enable();
+    map.scrollWheelZoom.enable();
+    if (map.touchZoom) map.touchZoom.enable();
+
+    if (restoreLayers) restoreNormalLayersAfterDraw();
+    else drawSelectionLayer.clearLayers();
+}
+
+function clientPointToLatLng(clientX, clientY) {
+    const rect = map.getContainer().getBoundingClientRect();
+    return map.containerPointToLatLng(L.point(clientX - rect.left, clientY - rect.top));
+}
+
+function beginDrawPath(e) {
+    if (!drawSelectionActive || drawPointerId !== null) return;
+    e.preventDefault();
+    drawPointerId = e.pointerId;
+    drawPoints = [clientPointToLatLng(e.clientX, e.clientY)];
+    drawSelectionLayer.clearLayers();
+    setDrawPanel("囲み範囲を描画中...");
+
+    if (drawPathLayer) map.removeLayer(drawPathLayer);
+    drawPathLayer = L.polyline(drawPoints, {
+        color: '#f59e0b',
+        weight: 4,
+        opacity: 0.95,
+        lineCap: 'round',
+        lineJoin: 'round'
+    }).addTo(map);
+    map.getContainer().setPointerCapture?.(e.pointerId);
+}
+
+function extendDrawPath(e) {
+    if (!drawSelectionActive || e.pointerId !== drawPointerId) return;
+    e.preventDefault();
+    const nextPoint = clientPointToLatLng(e.clientX, e.clientY);
+    const lastPoint = drawPoints[drawPoints.length - 1];
+    if (lastPoint && map.latLngToLayerPoint(lastPoint).distanceTo(map.latLngToLayerPoint(nextPoint)) < 4) return;
+
+    drawPoints.push(nextPoint);
+    if (drawPathLayer) drawPathLayer.setLatLngs(drawPoints);
+}
+
+async function finishDrawPath(e) {
+    if (!drawSelectionActive || e.pointerId !== drawPointerId) return;
+    e.preventDefault();
+    map.getContainer().releasePointerCapture?.(e.pointerId);
+    drawPointerId = null;
+
+    if (drawPoints.length < 3) {
+        setDrawPanel("範囲が小さすぎます。ピンを探す場所をぐるっと囲ってください。");
+        if (drawPathLayer) {
+            map.removeLayer(drawPathLayer);
+            drawPathLayer = null;
+        }
+        return;
+    }
+
+    const polygon = drawPoints.slice();
+    if (drawPathLayer) {
+        map.removeLayer(drawPathLayer);
+    }
+    drawPathLayer = L.polygon(polygon, {
+        color: '#f59e0b',
+        weight: 3,
+        opacity: 0.95,
+        fillColor: '#f59e0b',
+        fillOpacity: 0.12
+    }).addTo(map);
+
+    document.body.classList.add('draw-results-visible');
+    await renderDrawSelectionResults(polygon);
+    drawSelectionActive = false;
+    document.body.classList.remove('draw-selecting');
+    map.dragging.enable();
+    map.doubleClickZoom.enable();
+    map.scrollWheelZoom.enable();
+    if (map.touchZoom) map.touchZoom.enable();
+}
+
+const drawSelectBtn = document.getElementById('draw-select-btn');
+drawSelectBtn?.addEventListener('click', () => {
+    if (drawSelectionActive || document.body.classList.contains('draw-results-visible')) stopDrawSelectionMode(true);
+    else startDrawSelectionMode();
+});
+
+document.getElementById('draw-clear-btn')?.addEventListener('click', () => stopDrawSelectionMode(true));
+const mapContainer = map.getContainer();
+mapContainer.addEventListener('pointerdown', beginDrawPath);
+mapContainer.addEventListener('pointermove', extendDrawPath);
+mapContainer.addEventListener('pointerup', finishDrawPath);
+mapContainer.addEventListener('pointercancel', finishDrawPath);
 
 const wideAreaAutoZoomKeys = new Set([
     'keikan', 'tree', 'fudo', 'denken', 'fuchi', 'kanko',
