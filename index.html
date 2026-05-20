@@ -31,10 +31,12 @@
     <button id="license-btn" class="floating-btn" title="ライセンス">📜</button>
 
     <div id="draw-result-panel" aria-live="polite">
-        <div class="draw-panel-title">囲み表示</div>
+        <div class="draw-panel-header">
+            <div class="draw-panel-title">囲み表示累計</div>
+            <button id="draw-clear-btn" type="button">通常表示に戻す</button>
+        </div>
         <div id="draw-result-summary">ペンで地図を囲ってください</div>
         <div id="draw-result-breakdown"></div>
-        <button id="draw-clear-btn" type="button">通常表示に戻す</button>
     </div>
 
     <div id="loading-screen">

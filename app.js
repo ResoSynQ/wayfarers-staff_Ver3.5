@@ -95,11 +95,18 @@ let myakuLargeMarker = null;
 let legacyGeoJsonLayer = null;
 Object.keys(layerDefs).forEach(key => { layers[key] = L.layerGroup(); });
 const drawSelectionLayer = L.layerGroup();
+const drawAreaLayer = L.layerGroup();
 let drawPathLayer = null;
 let drawSelectionActive = false;
 let drawSavedVisibleLayers = new Set();
 let drawPoints = [];
 let drawPointerId = null;
+let drawSelectionCounts = {};
+let drawSelectionTotal = 0;
+let drawSelectedFeatureIds = new Set();
+let drawActiveTouchPointers = new Set();
+let drawSelectedEntries = [];
+let drawVisibleKeys = new Set();
 
 function repairGeoJson(data) {
     if (!data || !data.features) return data;
@@ -332,10 +339,11 @@ fetchAllData();
 
 const overlayMaps = {
     "♟️ 道標": layers.rel, "🌳 公園・遊具": layers.park, "🏟️ 公共施設": layers.com, "📚 文化施設": layers.mus, "🏃‍♂️ 体育施設": layers.gym, "🏯 文化財": layers.cul, "🚾 トイレ": layers.wc,
+    "🍽️ 喫茶店・レストラン": layers.restaurants,
     "🏞️ 景観地区": layers.keikan, "🌲 景観重要建造物樹木": layers.tree, "📜 歴史的風土保存区域": layers.fudo, "🏘️ 伝統的建造物群保存地区": layers.denken, "🗺️ 歴史的風致重点地区": layers.fuchi, "🎆 観光資源": layers.kanko, 
-    "🍽️ 喫茶店・レストラン": layers.restaurants, "🐾 トレイル.古道": layers.trail, "🛤️ 東海自然歩道": layers.shizenhodo, "🛣️ 五街道": layers.gokaido,
-    "🌍 トレンド": layers.live_trend, "🌸 開花": layers.live_flower, "😊 ローカルニュース": layers.live_local,
-    "🗣️ ユーザー投稿スポット": layers.user_spots, "🎡 万博・レガシー": layers.legacy_spots
+    "🐾 トレイル.古道": layers.trail, "🛤️ 東海自然歩道": layers.shizenhodo, "🛣️ 五街道": layers.gokaido,
+    "😊 ローカルニュース": layers.live_local, "🎡 万博・レガシー": layers.legacy_spots,
+    "🗣️ ユーザー投稿スポット": layers.user_spots
 };
 const layerLabels = Object.fromEntries(
     Object.entries(overlayMaps).map(([label, layer]) => {
@@ -344,8 +352,10 @@ const layerLabels = Object.fromEntries(
     }).filter(([key]) => key)
 );
 const drawSelectableKeys = [
-    'rel', 'park', 'com', 'mus', 'gym', 'cul', 'wc', 'kanko',
-    'restaurants', 'live_trend', 'live_flower', 'live_local',
+    'rel', 'park', 'com', 'mus', 'gym', 'cul', 'wc',
+    'keikan', 'tree', 'fudo', 'denken', 'fuchi', 'kanko',
+    'restaurants', 'trail', 'shizenhodo', 'gokaido',
+    'live_local',
     'user_spots', 'legacy_spots'
 ];
 
@@ -388,6 +398,64 @@ function pointInBounds(point, bounds) {
         point.lat <= bounds.maxLat &&
         point.lng >= bounds.minLng &&
         point.lng <= bounds.maxLng;
+}
+
+function coordToLatLng(coord) {
+    if (!Array.isArray(coord) || coord.length < 2) return null;
+    if (typeof coord[0] !== 'number' || typeof coord[1] !== 'number') return null;
+    return L.latLng(coord[1], coord[0]);
+}
+
+function latLngsFromGeometry(geometry) {
+    if (!geometry) return [];
+
+    if (geometry.type === 'Point') {
+        const point = coordToLatLng(geometry.coordinates);
+        return point ? [point] : [];
+    }
+
+    if (geometry.type === 'MultiPoint' || geometry.type === 'LineString') {
+        return (geometry.coordinates || []).map(coordToLatLng).filter(Boolean);
+    }
+
+    if (geometry.type === 'MultiLineString' || geometry.type === 'Polygon') {
+        return (geometry.coordinates || []).flatMap(line => (line || []).map(coordToLatLng).filter(Boolean));
+    }
+
+    if (geometry.type === 'MultiPolygon') {
+        return (geometry.coordinates || []).flatMap(poly =>
+            (poly || []).flatMap(ring => (ring || []).map(coordToLatLng).filter(Boolean))
+        );
+    }
+
+    return [];
+}
+
+function polygonRingsFromGeometry(geometry) {
+    if (!geometry) return [];
+    if (geometry.type === 'Polygon') return geometry.coordinates || [];
+    if (geometry.type === 'MultiPolygon') return (geometry.coordinates || []).flatMap(poly => poly || []);
+    return [];
+}
+
+function featurePolygonContainsDrawPoint(feature, polygon) {
+    const rings = polygonRingsFromGeometry(feature.geometry);
+    if (!rings.length) return false;
+
+    return rings.some(ring => {
+        const ringLatLngs = (ring || []).map(coordToLatLng).filter(Boolean);
+        if (ringLatLngs.length < 3) return false;
+        return polygon.some(point => pointInPolygon(point, ringLatLngs));
+    });
+}
+
+function featureIntersectsPolygon(feature, polygon, polygonBounds) {
+    if (!feature || !feature.geometry) return false;
+    const points = latLngsFromGeometry(feature.geometry);
+    if (!points.length) return false;
+
+    return points.some(point => pointInBounds(point, polygonBounds) && pointInPolygon(point, polygon)) ||
+        featurePolygonContainsDrawPoint(feature, polygon);
 }
 
 function getFeatureLatLng(feature) {
@@ -476,6 +544,52 @@ function createDrawSelectionMarker(key, feature, latlng) {
         .bindPopup(`<strong>${getFeatureName(feature.properties)}</strong>`);
 }
 
+function bindDrawFeaturePopup(key, feature, layer) {
+    const def = layerDefs[key];
+
+    if (key === 'live_trend' || key === 'live_flower' || key === 'live_local') return;
+
+    if (def.isUserSpot) {
+        const name = feature.properties.name || "名称未定";
+        const reason = feature.properties.reason || "";
+        layer.bindPopup(`
+            <div style="text-align:center; min-width:180px;">
+                <b style="color:#e67e22; font-size:1.1em;">【🗣️ ユーザー投稿】</b><br>
+                <span style="font-size:1.2em; font-weight:bold;">${name}</span><br>
+                <hr style="margin:8px 0; border:0; border-top:1px dashed #ccc;">
+                <span style="color:#555; font-size:0.9em;">${reason}</span>
+            </div>
+        `);
+        return;
+    }
+
+    layer.bindPopup(`<strong>${getFeatureName(feature.properties)}</strong>`);
+}
+
+function createDrawSelectionLayer(key, feature) {
+    const def = layerDefs[key];
+    const latlng = getFeatureLatLng(feature);
+
+    if (latlng) {
+        return createDrawSelectionMarker(key, feature, latlng);
+    }
+
+    return L.geoJSON(feature, {
+        style: typeof def.style === 'function' ? def.style : (def.style || { color: '#f59e0b', weight: 3, fillOpacity: 0.18 }),
+        onEachFeature: function(ft, layer) {
+            bindDrawFeaturePopup(key, ft, layer);
+        }
+    });
+}
+
+function renderDrawVisibleResults() {
+    drawSelectionLayer.clearLayers();
+    drawSelectedEntries.forEach(entry => {
+        if (!drawVisibleKeys.has(entry.key)) return;
+        drawSelectionLayer.addLayer(createDrawSelectionLayer(entry.key, entry.feature));
+    });
+}
+
 function setDrawPanel(summary, counts = {}) {
     const summaryEl = document.getElementById('draw-result-summary');
     const breakdownEl = document.getElementById('draw-result-breakdown');
@@ -494,16 +608,58 @@ function setDrawPanel(summary, counts = {}) {
     breakdownEl.innerHTML = rows.length ? rows.join('') : '';
 }
 
+function resetDrawSelectionResults() {
+    drawSelectionLayer.clearLayers();
+    drawAreaLayer.clearLayers();
+    drawSelectionCounts = {};
+    drawSelectionTotal = 0;
+    drawSelectedFeatureIds = new Set();
+    drawSelectedEntries = [];
+}
+
 function canUseDrawSelection() {
-    return map.getZoom() >= SCAN_ZOOM;
+    return map.getZoom() >= DRAW_ZOOM;
 }
 
 function updateDrawSelectBtn() {
     if (!drawSelectBtn) return;
-    const unavailable = !canUseDrawSelection() && !drawSelectionActive && !document.body.classList.contains('draw-results-visible');
+    const hasDrawResults = document.body.classList.contains('draw-results-visible') || drawSelectionTotal > 0;
+    const unavailable = !canUseDrawSelection() && !drawSelectionActive && !hasDrawResults;
     drawSelectBtn.disabled = unavailable;
     drawSelectBtn.classList.toggle('disabled', unavailable);
-    drawSelectBtn.title = unavailable ? "ズーム15以上で利用できます" : "ペンで囲って表示";
+    drawSelectBtn.title = unavailable
+        ? "ズーム15以上で利用できます"
+        : hasDrawResults
+            ? "通常表示に戻す"
+            : "ペンで囲って表示";
+}
+
+function isDrawFilterMode() {
+    return drawSelectionActive || document.body.classList.contains('draw-results-visible') || drawSelectionTotal > 0;
+}
+
+function getLayerKeyFromControlLabel(label) {
+    if (!label) return null;
+    const text = label.textContent.trim();
+    const match = Object.entries(layerLabels).find(([, labelText]) => text.includes(labelText));
+    return match ? match[0] : null;
+}
+
+function setLayerControlCheckboxState(keysToCheck) {
+    document.querySelectorAll('.leaflet-control-layers-overlays label').forEach(label => {
+        const key = getLayerKeyFromControlLabel(label);
+        const input = label.querySelector('input[type="checkbox"]');
+        if (!key || !input) return;
+        input.checked = keysToCheck.has(key);
+    });
+}
+
+function syncDrawLayerControlState() {
+    setLayerControlCheckboxState(drawVisibleKeys);
+}
+
+function syncNormalLayerControlState() {
+    setLayerControlCheckboxState(drawSavedVisibleLayers);
 }
 
 function hideNormalLayersForDraw() {
@@ -514,25 +670,32 @@ function hideNormalLayersForDraw() {
             map.removeLayer(layers[key]);
         }
     });
+    drawVisibleKeys = new Set(drawSelectableKeys);
     if (!map.hasLayer(drawSelectionLayer)) drawSelectionLayer.addTo(map);
+    if (!map.hasLayer(drawAreaLayer)) drawAreaLayer.addTo(map);
+    setTimeout(syncDrawLayerControlState, 0);
 }
 
 function restoreNormalLayersAfterDraw() {
-    drawSelectionLayer.clearLayers();
+    resetDrawSelectionResults();
+    const restoredKeys = new Set(drawSavedVisibleLayers);
     drawSavedVisibleLayers.forEach(key => {
         if (layers[key] && !map.hasLayer(layers[key])) {
             layers[key].addTo(map);
         }
     });
     drawSavedVisibleLayers.clear();
+    setTimeout(() => setLayerControlCheckboxState(restoredKeys), 0);
+}
+
+function getDrawFeatureId(key, index) {
+    return `${key}:${index}`;
 }
 
 async function renderDrawSelectionResults(polygon) {
-    drawSelectionLayer.clearLayers();
     setDrawPanel("囲み範囲のデータを確認中...");
 
-    const counts = {};
-    let total = 0;
+    let added = 0;
     const polygonBounds = getLatLngBoundsFromPolygon(polygon);
 
     for (const key of drawSelectableKeys) {
@@ -545,13 +708,16 @@ async function renderDrawSelectionResults(polygon) {
 
         for (let i = 0; i < features.length; i += 1) {
             const feature = features[i];
+            const featureId = getDrawFeatureId(key, i);
+            if (drawSelectedFeatureIds.has(featureId)) continue;
             if (!featureMatchesLayerCategory(key, feature)) continue;
-            const latlng = getFeatureLatLng(feature);
-            if (!latlng || !pointInBounds(latlng, polygonBounds) || !pointInPolygon(latlng, polygon)) continue;
+            if (!featureIntersectsPolygon(feature, polygon, polygonBounds)) continue;
 
-            drawSelectionLayer.addLayer(createDrawSelectionMarker(key, feature, latlng));
-            counts[key] = (counts[key] || 0) + 1;
-            total += 1;
+            drawSelectedFeatureIds.add(featureId);
+            drawSelectedEntries.push({ key, feature });
+            drawSelectionCounts[key] = (drawSelectionCounts[key] || 0) + 1;
+            drawSelectionTotal += 1;
+            added += 1;
 
             if (i > 0 && i % 500 === 0) {
                 await new Promise(resolve => setTimeout(resolve, 0));
@@ -559,12 +725,13 @@ async function renderDrawSelectionResults(polygon) {
         }
     }
 
-    if (total === 0) {
+    if (drawSelectionTotal === 0) {
         setDrawPanel("囲み範囲内に表示できるピンはありませんでした。もう少し広く囲ってみてください。");
         return;
     }
 
-    setDrawPanel(`囲み範囲内に ${total} 件のピンがあります。`, counts);
+    renderDrawVisibleResults();
+    setDrawPanel(`累計 ${drawSelectionTotal} 件の項目を表示中です。続けて別の場所も囲めます。`, drawSelectionCounts);
 }
 
 function startDrawSelectionMode() {
@@ -577,24 +744,23 @@ function startDrawSelectionMode() {
     drawSelectionActive = true;
     drawPoints = [];
     drawPointerId = null;
+    drawActiveTouchPointers.clear();
+    resetDrawSelectionResults();
     map.closePopup();
     closeLayerMenu();
     hideNormalLayersForDraw();
     document.body.classList.add('draw-selecting');
     document.body.classList.remove('draw-results-visible');
     document.getElementById('draw-select-btn')?.classList.add('active');
-    setDrawPanel("ペンで地図を囲ってください。指を離すと、その範囲だけ表示します。");
+    setDrawPanel("ペンで地図を囲ってください。指を離すと、その範囲だけ表示します。続けて何度でも囲めます。");
 
-    map.dragging.disable();
-    map.doubleClickZoom.disable();
-    map.scrollWheelZoom.disable();
-    if (map.touchZoom) map.touchZoom.disable();
 }
 
 function stopDrawSelectionMode(restoreLayers = true) {
     drawSelectionActive = false;
     drawPoints = [];
     drawPointerId = null;
+    drawActiveTouchPointers.clear();
     if (drawPathLayer) {
         map.removeLayer(drawPathLayer);
         drawPathLayer = null;
@@ -609,21 +775,15 @@ function stopDrawSelectionMode(restoreLayers = true) {
     if (map.touchZoom) map.touchZoom.enable();
 
     if (restoreLayers) restoreNormalLayersAfterDraw();
-    else drawSelectionLayer.clearLayers();
+    else resetDrawSelectionResults();
     updateDrawSelectBtn();
 }
 
 function enforceDrawZoomLimit() {
-    if (canUseDrawSelection()) {
-        updateDrawSelectBtn();
-        return;
+    if (!canUseDrawSelection() && drawPointerId !== null) {
+        cancelCurrentDrawPath("ズーム15以上で囲みを追加できます。表示中のピンは通常表示に戻すまで残ります。");
     }
-
-    if (drawSelectionActive || document.body.classList.contains('draw-results-visible')) {
-        stopDrawSelectionMode(true);
-    } else {
-        updateDrawSelectBtn();
-    }
+    updateDrawSelectBtn();
 }
 
 function clientPointToLatLng(clientX, clientY) {
@@ -631,13 +791,67 @@ function clientPointToLatLng(clientX, clientY) {
     return map.containerPointToLatLng(L.point(clientX - rect.left, clientY - rect.top));
 }
 
+function disableMapInteractionsWhileDrawing() {
+    map.dragging.disable();
+    map.doubleClickZoom.disable();
+    map.scrollWheelZoom.disable();
+}
+
+function enableMapInteractionsAfterDrawing() {
+    map.dragging.enable();
+    map.doubleClickZoom.enable();
+    map.scrollWheelZoom.enable();
+    if (map.touchZoom) map.touchZoom.enable();
+}
+
+function cancelCurrentDrawPath(message = null) {
+    if (drawPointerId !== null) {
+        try {
+            map.getContainer().releasePointerCapture?.(drawPointerId);
+        } catch (e) {
+            // Pointer capture may already be gone on touch-cancel paths.
+        }
+    }
+    if (drawPathLayer) {
+        map.removeLayer(drawPathLayer);
+        drawPathLayer = null;
+    }
+    drawPoints = [];
+    drawPointerId = null;
+    enableMapInteractionsAfterDrawing();
+    if (message) setDrawPanel(message);
+}
+
+function shouldSkipDrawStart(e) {
+    const target = e.target;
+    if (!target || typeof target.closest !== 'function') return false;
+    return Boolean(target.closest('.leaflet-control-layers, .leaflet-marker-icon, .leaflet-popup, .leaflet-interactive, #draw-result-panel, button'));
+}
+
 function beginDrawPath(e) {
+    if (drawSelectionActive && e.pointerType === 'touch') {
+        drawActiveTouchPointers.add(e.pointerId);
+        if (drawActiveTouchPointers.size > 1) {
+            cancelCurrentDrawPath("2本指では地図を移動・ズームできます。1本指で囲みを描けます。");
+            return;
+        }
+    }
     if (!drawSelectionActive || drawPointerId !== null) return;
+    if (shouldSkipDrawStart(e)) return;
+    if (!canUseDrawSelection()) {
+        setDrawPanel(drawSelectionTotal > 0
+            ? `累計 ${drawSelectionTotal} 件の項目を表示中です。囲みの追加はズーム15以上でできます。`
+            : "ズーム15以上で囲みを追加できます。もう少し近づいてください。", drawSelectionCounts);
+        updateDrawSelectBtn();
+        return;
+    }
+
     e.preventDefault();
+    e.stopPropagation();
     drawPointerId = e.pointerId;
     drawPoints = [clientPointToLatLng(e.clientX, e.clientY)];
-    drawSelectionLayer.clearLayers();
     setDrawPanel("囲み範囲を描画中...");
+    disableMapInteractionsWhileDrawing();
 
     if (drawPathLayer) map.removeLayer(drawPathLayer);
     drawPathLayer = L.polyline(drawPoints, {
@@ -647,12 +861,19 @@ function beginDrawPath(e) {
         lineCap: 'round',
         lineJoin: 'round'
     }).addTo(map);
-    map.getContainer().setPointerCapture?.(e.pointerId);
+    if (e.pointerType !== 'touch') {
+        map.getContainer().setPointerCapture?.(e.pointerId);
+    }
 }
 
 function extendDrawPath(e) {
     if (!drawSelectionActive || e.pointerId !== drawPointerId) return;
+    if (e.pointerType === 'touch' && drawActiveTouchPointers.size > 1) {
+        cancelCurrentDrawPath("2本指では地図を移動・ズームできます。1本指で囲みを描けます。");
+        return;
+    }
     e.preventDefault();
+    e.stopPropagation();
     const nextPoint = clientPointToLatLng(e.clientX, e.clientY);
     const lastPoint = drawPoints[drawPoints.length - 1];
     if (lastPoint && map.latLngToLayerPoint(lastPoint).distanceTo(map.latLngToLayerPoint(nextPoint)) < 4) return;
@@ -662,8 +883,10 @@ function extendDrawPath(e) {
 }
 
 async function finishDrawPath(e) {
+    if (e.pointerType === 'touch') drawActiveTouchPointers.delete(e.pointerId);
     if (!drawSelectionActive || e.pointerId !== drawPointerId) return;
     e.preventDefault();
+    e.stopPropagation();
     map.getContainer().releasePointerCapture?.(e.pointerId);
     drawPointerId = null;
 
@@ -673,6 +896,7 @@ async function finishDrawPath(e) {
             map.removeLayer(drawPathLayer);
             drawPathLayer = null;
         }
+        enableMapInteractionsAfterDrawing();
         return;
     }
 
@@ -685,17 +909,15 @@ async function finishDrawPath(e) {
         weight: 3,
         opacity: 0.95,
         fillColor: '#f59e0b',
-        fillOpacity: 0.12
-    }).addTo(map);
+        fillOpacity: 0.12,
+        interactive: false
+    });
+    drawAreaLayer.addLayer(drawPathLayer);
+    drawPathLayer = null;
 
     document.body.classList.add('draw-results-visible');
     await renderDrawSelectionResults(polygon);
-    drawSelectionActive = false;
-    document.body.classList.remove('draw-selecting');
-    map.dragging.enable();
-    map.doubleClickZoom.enable();
-    map.scrollWheelZoom.enable();
-    if (map.touchZoom) map.touchZoom.enable();
+    enableMapInteractionsAfterDrawing();
 }
 
 const drawSelectBtn = document.getElementById('draw-select-btn');
@@ -706,16 +928,16 @@ drawSelectBtn?.addEventListener('click', () => {
 
 document.getElementById('draw-clear-btn')?.addEventListener('click', () => stopDrawSelectionMode(true));
 const mapContainer = map.getContainer();
-mapContainer.addEventListener('pointerdown', beginDrawPath);
-mapContainer.addEventListener('pointermove', extendDrawPath);
-mapContainer.addEventListener('pointerup', finishDrawPath);
-mapContainer.addEventListener('pointercancel', finishDrawPath);
+mapContainer.addEventListener('pointerdown', beginDrawPath, true);
+mapContainer.addEventListener('pointermove', extendDrawPath, true);
+mapContainer.addEventListener('pointerup', finishDrawPath, true);
+mapContainer.addEventListener('pointercancel', finishDrawPath, true);
 
 const wideAreaAutoZoomKeys = new Set([
     'keikan', 'tree', 'fudo', 'denken', 'fuchi', 'kanko',
     'trail', 'shizenhodo', 'gokaido',
-    'live_trend', 'live_flower', 'live_local',
-    'user_spots', 'legacy_spots'
+    'live_local', 'legacy_spots',
+    'user_spots'
 ]);
 
 function autoZoomForWideAreaLayer(layer) {
@@ -737,10 +959,9 @@ function insertCategoryHeaders() {
         let headerHtml = "";
         if (text.includes("道標")) headerHtml = "<div class='custom-layer-header' style='margin:18px 0 10px 0;'><hr style='margin:0 0 12px 0; border:0; border-top:1px solid #ddd;'><div style='font-size:1.05em; font-weight:bold; color:#1565C0;'>【基本探索】</div></div>";
         else if (text.includes("景観地区")) headerHtml = "<div class='custom-layer-header' style='margin:18px 0 10px 0;'><hr style='margin:0 0 12px 0; border:0; border-top:1px solid #ddd;'><div style='font-size:1.05em; font-weight:bold; color:#E65100;'>【広域地域データ】</div></div>";
-        else if (text.includes("喫茶店")) headerHtml = "<div class='custom-layer-header' style='margin:18px 0 10px 0;'><hr style='margin:0 0 12px 0; border:0; border-top:1px solid #ddd;'><div style='font-size:1.05em; font-weight:bold; color:#2E7D32;'>【上級者向け】</div></div>";
-        else if (text.includes("トレンド")) headerHtml = "<div class='custom-layer-header' style='margin:18px 0 10px 0;'><hr style='margin:0 0 12px 0; border:0; border-top:1px solid #ddd;'><div style='font-size:1.05em; font-weight:bold; color:#8e44ad;'>【実験機能】</div></div>";
+        else if (text.includes("トレイル")) headerHtml = "<div class='custom-layer-header' style='margin:18px 0 10px 0;'><hr style='margin:0 0 12px 0; border:0; border-top:1px solid #ddd;'><div style='font-size:1.05em; font-weight:bold; color:#2E7D32;'>【上級者向け】</div></div>";
+        else if (text.includes("ローカル")) headerHtml = "<div class='custom-layer-header' style='margin:18px 0 10px 0;'><hr style='margin:0 0 12px 0; border:0; border-top:1px solid #ddd;'><div style='font-size:1.05em; font-weight:bold; color:#8e44ad;'>【実験機能】</div></div>";
         else if (text.includes("ユーザー投稿")) headerHtml = "<div class='custom-layer-header' style='margin:18px 0 10px 0;'><hr style='margin:0 0 12px 0; border:0; border-top:1px solid #ddd;'><div style='font-size:1.05em; font-weight:bold; color:#e67e22;'>【コミュニティ】</div></div>";
-        else if (text.includes("万博")) headerHtml = "<div class='custom-layer-header' style='margin:18px 0 10px 0;'><hr style='margin:0 0 12px 0; border:0; border-top:1px solid #ddd;'><div style='font-size:1.05em; font-weight:bold; color:#d35400;'>【特別イベント】</div></div>";
         
         if (headerHtml) label.insertAdjacentHTML('beforebegin', headerHtml);
     });
@@ -748,6 +969,7 @@ function insertCategoryHeaders() {
 insertCategoryHeaders();
 map.on('layeradd layerremove', () => setTimeout(insertCategoryHeaders, 10));
 
+const DRAW_ZOOM = 15;
 const SCAN_ZOOM = 15;
 const scanBtn = document.getElementById('scan-btn');
 function updateScanBtn() {
@@ -809,6 +1031,35 @@ map.on('overlayremove', function(e) {
 
 const menuBtn = document.getElementById('menu-btn');
 const layerMenu = document.querySelector('.leaflet-control-layers');
+
+function handleDrawLayerMenuClick(e) {
+    if (!isDrawFilterMode()) return;
+
+    const label = e.target.closest?.('.leaflet-control-layers-overlays label');
+    if (!label) return;
+
+    const key = getLayerKeyFromControlLabel(label);
+    const input = label.querySelector('input[type="checkbox"]');
+    if (!key || !input || !drawSelectableKeys.includes(key)) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+    e.stopImmediatePropagation();
+
+    const nextChecked = !drawVisibleKeys.has(key);
+    input.checked = nextChecked;
+    if (nextChecked) {
+        drawVisibleKeys.add(key);
+    } else {
+        drawVisibleKeys.delete(key);
+    }
+
+    renderDrawVisibleResults();
+    updateDrawSelectBtn();
+    setTimeout(syncDrawLayerControlState, 0);
+}
+
+layerMenu?.addEventListener('click', handleDrawLayerMenuClick, true);
 
 function closeLayerMenu() {
     document.body.classList.remove('menu-open');

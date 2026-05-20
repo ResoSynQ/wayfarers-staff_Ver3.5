@@ -75,7 +75,6 @@ body.draw-selecting #map {
     z-index: 950;
     width: min(360px, calc(100vw - 28px));
     max-height: 42vh;
-    overflow-y: auto;
     box-sizing: border-box;
     padding: 12px;
     border: 2px solid rgba(0,0,0,0.18);
@@ -92,7 +91,19 @@ body.draw-results-visible #draw-result-panel {
 .draw-panel-title {
     font-size: 15px;
     font-weight: 800;
-    margin-bottom: 6px;
+}
+.draw-panel-header {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin: -12px -12px 8px -12px;
+    padding: 12px;
+    border-bottom: 1px solid rgba(0,0,0,0.08);
+    background: rgba(255,255,255,0.98);
 }
 #draw-result-summary {
     font-size: 13px;
@@ -103,6 +114,9 @@ body.draw-results-visible #draw-result-panel {
     display: grid;
     gap: 6px;
     margin: 10px 0;
+    max-height: min(26vh, 260px);
+    overflow-y: auto;
+    padding-right: 4px;
 }
 .draw-breakdown-row {
     display: flex;
@@ -122,15 +136,17 @@ body.draw-results-visible #draw-result-panel {
     font-weight: 800;
 }
 #draw-clear-btn {
-    width: 100%;
-    min-height: 38px;
+    flex-shrink: 0;
+    min-height: 34px;
+    padding: 0 12px;
     border: none;
     border-radius: 6px;
     background: #111827;
     color: white;
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 800;
     cursor: pointer;
+    white-space: nowrap;
 }
 
 /* 🚪 スライドメニュー */
@@ -153,21 +169,19 @@ body.menu-open .leaflet-control-layers { left: 0 !important; }
 
 /* 🚨 Leafletの「常にスクロールバーを出す」お節介仕様を無効化！ */
 .leaflet-control-layers-scrollbar {
-    overflow-y: auto !important;
-    padding-right: 10px !important;
+    overflow: visible !important;
+    max-height: none !important;
+    padding-right: 0 !important;
 }
 
 /* 🚨 PCで見てもスマホのような細くて美しいスクロールバーにする魔法 */
-.leaflet-control-layers::-webkit-scrollbar,
-.leaflet-control-layers-scrollbar::-webkit-scrollbar {
+.leaflet-control-layers::-webkit-scrollbar {
     width: 5px;
 }
-.leaflet-control-layers::-webkit-scrollbar-track,
-.leaflet-control-layers-scrollbar::-webkit-scrollbar-track {
+.leaflet-control-layers::-webkit-scrollbar-track {
     background: transparent;
 }
-.leaflet-control-layers::-webkit-scrollbar-thumb,
-.leaflet-control-layers-scrollbar::-webkit-scrollbar-thumb {
+.leaflet-control-layers::-webkit-scrollbar-thumb {
     background: rgba(0, 0, 0, 0.2);
     border-radius: 10px;
 }
