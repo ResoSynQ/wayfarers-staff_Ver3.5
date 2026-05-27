@@ -1117,8 +1117,8 @@ function getLegacySearchCandidates(query) {
     });
 
     if (partial.length === 1) return { type: 'match', feature: partial[0] };
-    if (partial.length > 1 && partial.length <= legacyCandidateLimit) return { type: 'ambiguous', features: partial };
-    if (partial.length > legacyCandidateLimit) {
+    if (partial.length > 1) return { type: 'ambiguous', features: partial };
+    if (false && partial.length > legacyCandidateLimit) {
         return {
             type: 'blocked',
             message: `${query} は万博レガシーピンの候補が多すぎます。もう少し詳しい名称で検索してください。`
