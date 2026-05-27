@@ -807,6 +807,24 @@ function setLayerControlCheckboxState(keysToCheck) {
     });
 }
 
+function getVisibleLayerKeys() {
+    const visibleKeys = new Set();
+    Object.keys(layers).forEach(key => {
+        if (map.hasLayer(layers[key])) visibleKeys.add(key);
+    });
+    return visibleKeys;
+}
+
+function ensureLegacyLayerEnabledForSearch() {
+    if (!layers.legacy_spots) return;
+    if (!map.hasLayer(layers.legacy_spots)) {
+        layers.legacy_spots.addTo(map);
+    }
+    const visibleKeys = getVisibleLayerKeys();
+    visibleKeys.add('legacy_spots');
+    setTimeout(() => setLayerControlCheckboxState(visibleKeys), 0);
+}
+
 function syncDrawLayerControlState() {
     setLayerControlCheckboxState(drawVisibleKeys);
 }
@@ -1143,6 +1161,7 @@ function showLegacySearchFeature(feature, updateShareUrl = true) {
     } else {
         resetMunicipalityResults();
     }
+    ensureLegacyLayerEnabledForSearch();
 
     if (!map.hasLayer(legacySearchLayer)) legacySearchLayer.addTo(map);
     legacySearchLayer.clearLayers();
@@ -1392,6 +1411,7 @@ async function runMunicipalitySearchFull(query) {
         setMunicipalityPanel("市区町村境界データを読み込み中...");
         setMunicipalityPanel("市町村境界データを読み込み中...");
         setMunicipalityPanel("万博ピンを確認中...");
+        ensureLegacyLayerEnabledForSearch();
         await fetchLayerData('legacy_spots', layerDefs.legacy_spots);
         const legacyCandidates = getLegacySearchCandidates(trimmed);
         if (legacyCandidates.type === 'blocked') {
@@ -1446,6 +1466,7 @@ async function runMunicipalitySearch(query) {
     if (!ENABLE_MUNICIPALITY_SEARCH) {
         try {
             setMunicipalityPanel("万博レガシーピンを検索中...");
+            ensureLegacyLayerEnabledForSearch();
             await fetchLayerData('legacy_spots', layerDefs.legacy_spots);
             const legacyCandidates = getLegacySearchCandidates(trimmed);
             if (legacyCandidates.type === 'blocked') {
@@ -1482,6 +1503,7 @@ async function openLegacyListPanel() {
 
     setMunicipalityPanel("登録ピン一覧を読み込み中...");
     try {
+        ensureLegacyLayerEnabledForSearch();
         await fetchLayerData('legacy_spots', layerDefs.legacy_spots);
         const approvedFeatures = getApprovedLegacyFeatures();
         legacySearchCandidateFeatures = approvedFeatures;
@@ -1752,6 +1774,7 @@ function runInitialSharedSearch() {
         setTimeout(async () => {
             try {
                 setMunicipalityPanel("共有ピンを読み込み中...");
+                ensureLegacyLayerEnabledForSearch();
                 await fetchLayerData('legacy_spots', layerDefs.legacy_spots);
                 const candidate = getLegacySearchCandidates(name);
                 if (candidate.type === 'match') {
@@ -1761,6 +1784,7 @@ function runInitialSharedSearch() {
                     return;
                 }
                 if (Number.isFinite(lat) && Number.isFinite(lng)) {
+                    ensureLegacyLayerEnabledForSearch();
                     map.setView(L.latLng(lat, lng), zoom);
                     setMunicipalityPanel(`${name || '共有ピン'} の位置を表示しました。`);
                     document.body.classList.add('municipality-results-visible');
