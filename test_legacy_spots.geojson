@@ -1,0 +1,62 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "テスト: 赤ピン通常レガシー",
+        "popupContent": "<b style='color:#c62828;'>【テスト】</b><br>approval=TRUEのみの赤ピン確認用です。",
+        "category": "legacy",
+        "isStore": false,
+        "isKomyaku": false,
+        "link": "https://www.pref.nara.lg.jp/n153/p034015.html",
+        "image_url": "https://www.pref.nara.lg.jp/shared/images/sns/logo.png"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          135.7926651,
+          34.68521696
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "テスト: 青ピンSTORE",
+        "popupContent": "<b style='color:#1565c0;'>【テスト】</b><br>approval=TRUE / store=TRUE の青ピン確認用です。",
+        "category": "legacy",
+        "isStore": true,
+        "isKomyaku": false,
+        "link": "https://www.expo2025.or.jp/news/news-20260204-01-2/",
+        "image_url": "https://www.expo2025.or.jp/wp/wp-content/uploads/20260204.png"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          135.5023,
+          34.6937
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "テスト: CELL ART（こみゃく）2体",
+        "popupContent": "<b style='color:#666;'>【テスト】</b><br><b>【CELL ART（こみゃく）2体】</b><br>approval=TRUE / komyaku=TRUE の灰色ピン確認用です。",
+        "category": "legacy",
+        "isStore": false,
+        "isKomyaku": true,
+        "link": "",
+        "image_url": ""
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          135.457735287513,
+          34.686420613999
+        ]
+      }
+    }
+  ]
+}

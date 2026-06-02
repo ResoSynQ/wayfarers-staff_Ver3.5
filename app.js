@@ -83,7 +83,8 @@ const layerDefs = {
     live_flower: { url: 'trend_spots.geojson?t=' + new Date().getTime(), category: 'flower', color: '#ff69b4' },
     live_local: { url: 'trend_spots.geojson?t=' + new Date().getTime(), category: 'local', color: '#32cd32' },
     user_spots: { url: 'user_spots.geojson?t=' + new Date().getTime(), icon: icons.orange, isUserSpot: true },
-    legacy_spots: { url: 'legacy_spots.geojson?t=' + new Date().getTime(), icon: icons.red, isLegacy: true }
+    legacy_spots: { url: 'legacy_spots.geojson?t=' + new Date().getTime(), icon: icons.red, isLegacy: true },
+    test_legacy_spots: { url: 'test_legacy_spots.geojson?t=' + new Date().getTime(), icon: icons.red, isLegacy: true, isTestLegacy: true }
 };
 
 const immediateLayers = ['keikan', 'tree', 'fudo', 'denken', 'fuchi', 'kanko', 'trail', 'shizenhodo', 'gokaido'];
@@ -253,8 +254,8 @@ function renderGeoJson(key, bounds = null) {
     const def = layerDefs[key];
 
     // ▼ ▼ ▼ 万博レガシー専用のクラスタリング（ミャクミャク召喚ギミック） ▼ ▼ ▼
-    if (key === 'legacy_spots') {
-        legacyClusterGroup = L.markerClusterGroup({
+    if (def.isLegacy) {
+        const clusterGroup = L.markerClusterGroup({
             maxClusterRadius: 60,
             showCoverageOnHover: false,
             iconCreateFunction: function(cluster) {
@@ -288,10 +289,10 @@ function renderGeoJson(key, bounds = null) {
                 });
             }
         });
-        legacyClusterGroup.on('spiderfied', function(e) {
+        clusterGroup.on('spiderfied', function(e) {
             if (e.cluster && e.cluster._icon) e.cluster._icon.style.display = 'none';
         });
-        legacyClusterGroup.on('unspiderfied', function(e) {
+        clusterGroup.on('unspiderfied', function(e) {
             if (e.cluster && e.cluster._icon) e.cluster._icon.style.display = '';
         });
 
@@ -319,12 +320,15 @@ function renderGeoJson(key, bounds = null) {
                 layer.bindPopup(`<div style="min-width:200px;">${imgHtml}${feature.properties.popupContent}</div>`);
             }
         });
-        legacyGeoJsonLayer = geoJsonLayer;
+        if (key === 'legacy_spots') legacyGeoJsonLayer = geoJsonLayer;
 
-        legacyClusterGroup.addLayer(geoJsonLayer);
-        layers[key].addLayer(legacyClusterGroup);
-        updateLegacyClusterVisibility();
-        setTimeout(updateStandaloneMyakuLarge, 0);
+        clusterGroup.addLayer(geoJsonLayer);
+        layers[key].addLayer(clusterGroup);
+        if (key === 'legacy_spots') {
+            legacyClusterGroup = clusterGroup;
+            updateLegacyClusterVisibility();
+            setTimeout(updateStandaloneMyakuLarge, 0);
+        }
         return; 
     }
     // ▲ ▲ ▲ ここまでレガシー専用処理 ▲ ▲ ▲
@@ -415,7 +419,7 @@ const overlayMaps = {
     "🍽️ 喫茶店・レストラン": layers.restaurants,
     "🏞️ 景観地区": layers.keikan, "🌲 景観重要建造物樹木": layers.tree, "📜 歴史的風土保存区域": layers.fudo, "🏘️ 伝統的建造物群保存地区": layers.denken, "🗺️ 歴史的風致重点地区": layers.fuchi, "🎆 観光資源": layers.kanko, 
     "🐾 トレイル.古道": layers.trail, "🛤️ 東海自然歩道": layers.shizenhodo, "🛣️ 五街道": layers.gokaido,
-    "😊 ローカルニュース": layers.live_local, "🎡 万博・レガシー": layers.legacy_spots,
+    "😊 ローカルニュース": layers.live_local, "🎡 万博・レガシー": layers.legacy_spots, "Test Legacy": layers.test_legacy_spots,
     "🗣️ ユーザー投稿スポット": layers.user_spots
 };
 const layerLabels = Object.fromEntries(
@@ -429,7 +433,7 @@ const drawSelectableKeys = [
     'keikan', 'tree', 'fudo', 'denken', 'fuchi', 'kanko',
     'restaurants', 'trail', 'shizenhodo', 'gokaido',
     'live_local',
-    'user_spots', 'legacy_spots'
+    'user_spots', 'legacy_spots', 'test_legacy_spots'
 ];
 
 function pointInPolygon(point, polygon) {
@@ -1889,6 +1893,10 @@ map.on('overlayadd', async function(e) {
     if (e.layer === layers.live_local) await fetchLayerData('live_local', layerDefs.live_local);
     if (e.layer === layers.user_spots) await fetchLayerData('user_spots', layerDefs.user_spots);
     if (e.layer === layers.legacy_spots) await fetchLayerData('legacy_spots', layerDefs.legacy_spots);
+    if (e.layer === layers.test_legacy_spots) {
+        await fetchLayerData('test_legacy_spots', layerDefs.test_legacy_spots);
+        if (rawData['test_legacy_spots']) renderGeoJson('test_legacy_spots');
+    }
     if (e.name.includes('トレンド') && rawData['live_trend']) renderGeoJson('live_trend');
     if (e.name.includes('開花') && rawData['live_flower']) renderGeoJson('live_flower');
     if (e.name.includes('ローカル') && rawData['live_local']) renderGeoJson('live_local');
